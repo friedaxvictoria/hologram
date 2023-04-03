@@ -1187,20 +1187,31 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		volume_render_tex.enable(ctx, 1);
 		prog.set_uniform(ctx, "colour_tex", 1);
 	}
-	prog.set_uniform(ctx, "width", display_calib.width);
-	prog.set_uniform(ctx, "height", display_calib.height);
+	prog.set_uniform(ctx, "width", ctx.get_width());
+	prog.set_uniform(ctx, "height", ctx.get_height());
 	prog.set_uniform(ctx, "x_min", display_calib.x_min);
 	prog.set_uniform(ctx, "x_max", display_calib.x_max);
 	prog.set_uniform(ctx, "y_min", display_calib.y_min);
 	prog.set_uniform(ctx, "y_max", display_calib.y_max);
 
-	gl_set_projection_matrix(ctx, current_e, 1);
-	gl_set_modelview_matrix(ctx, current_e, 1, *this);
-	prog.set_uniform(ctx, "mvp_right", ctx.get_modelview_matrix() * ctx.get_projection_matrix());
+	float aspect = ctx.get_width() / (float)ctx.get_height();
+	ctx.push_modelview_matrix();
+	ctx.push_projection_matrix();
+	gl_set_projection_matrix(ctx, -1, aspect);
+	gl_set_modelview_matrix(ctx, -1, aspect, *this);
+	auto MVl = ctx.get_modelview_matrix(), Pl = ctx.get_projection_matrix();
+	ctx.pop_modelview_matrix();
+	ctx.pop_projection_matrix();
+	prog.set_uniform(ctx, "mvp_right", MVl*Pl);
 
-	gl_set_projection_matrix(ctx, current_e, 0);
-	gl_set_modelview_matrix(ctx, current_e, 0, *this);
-	prog.set_uniform(ctx, "mvp_left", ctx.get_modelview_matrix() * ctx.get_projection_matrix());
+	ctx.push_modelview_matrix();
+	ctx.push_projection_matrix();
+	gl_set_projection_matrix(ctx, 1, aspect);
+	gl_set_modelview_matrix(ctx, 1, aspect, *this);
+	auto MVr = ctx.get_modelview_matrix(), Pr = ctx.get_projection_matrix();
+	ctx.pop_modelview_matrix();
+	ctx.pop_projection_matrix();
+	prog.set_uniform(ctx, "mvp_left", MVr * Pr);
 	std::cout << ctx.get_modelview_matrix() * ctx.get_projection_matrix() << std::endl;
 
 		if (initiate_render_pass_recursion(ctx)) {
@@ -1248,8 +1259,9 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			glEnable(GL_SCISSOR_TEST);
 		}
 	}
-		// determine aspect ratio from opengl settings
-	GLint vp[4];
+
+	// determine aspect ratio from opengl settings
+	/*GLint vp[4];
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
 
@@ -1335,7 +1347,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			volume_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0); // --NOTE-- change to volume_holo_tex once ready
 			volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
-	}
+	}*/
 }
 
 
