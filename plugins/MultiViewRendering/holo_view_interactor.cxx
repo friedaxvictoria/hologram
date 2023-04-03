@@ -1201,6 +1201,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	gl_set_projection_matrix(ctx, current_e, 0);
 	gl_set_modelview_matrix(ctx, current_e, 0, *this);
 	prog.set_uniform(ctx, "mvp_left", ctx.get_modelview_matrix() * ctx.get_projection_matrix());
+	std::cout << ctx.get_modelview_matrix() * ctx.get_projection_matrix() << std::endl;
 
 		if (initiate_render_pass_recursion(ctx)) {
 		last_do_viewport_splitting = do_viewport_splitting;
