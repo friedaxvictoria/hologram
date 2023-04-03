@@ -1,0 +1,28 @@
+//////
+// NOTE ABOUT CGV FRAMEWORK CONFIG FILES
+// The .def file defined the default configuration which is also meant to checked into repositories. For a
+// locally tweaked/adjusted configuration, this default file should be copied into the same directory with
+// its file extension changed to ".cfg". When the Framework is instructed to load a .def config file, it
+// will first check if a .cfg file of the same name is present, and if yes, load that instead. This way,
+// a default config can be included in a version control system (VCS) while also allowing to modify the
+// config locally without interfering with the VCS, since the VCS can be instructed to just ignore the
+// .cfg file (an appropriate .gitignore file for Git is already included in this distribution)
+
+// The UI theme: light, mid, dark, darkest
+type(fltk_viewer_window):theme=dark
+
+// The mesh to load initially (uncomment to use, otherwise a procedurally generated polyhedron will be shown at startup)
+//type(mesh_viewer):mesh_filename="./res/blob.obj"
+
+// Whether to invent per-vertex colors when the mesh file does not provide any
+//type(mesh_viewer):invent_missing_colors=true
+
+// The multiplexing method to use for the rendered views: single, quilt, volume
+//type(holo_view_interactor):render_mpx_mode=volume
+// |___ NOTE: currently, both settings are force-synced to each other, so the last value to appear in the file will be
+// |          applied to both
+// The multiplexing method to use for the final lightfield images: single, quilt, volume
+//type(holo_view_interactor):holo_mpx_mode=quilt
+
+// Whether to output the actual hologram from the lightfield or just display the multiplexed lightfield images
+//type(holo_view_interactor):generate_hologram=false
