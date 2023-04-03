@@ -17,6 +17,9 @@
 #include <cgv/gui/provider.h>
 #include <cgv/gui/dialog.h>
 #include <cgv/math/ftransform.h>
+#include <cgv/render/render_buffer.h>
+#include <cgv/render/frame_buffer.h>
+
 
 using namespace cgv::base;
 using namespace cgv::signal;
@@ -79,12 +82,12 @@ only part of the cgv_support project tree available on demand.
 
 class mesh_viewer : public node, public drawable, public provider
 {
-public:
+  public:
 	typedef cgv::media::mesh::simple_mesh<float> mesh_type;
 	typedef mesh_type::idx_type idx_type;
 	typedef mesh_type::vec3i vec3i;
 
-protected:
+  protected:
 	std::string mesh_filename;
 	mesh_type M;
 	cgv::render::mesh_render_info mesh_info;
@@ -95,7 +98,7 @@ protected:
 	bool show_surface = true;
 	CullingMode cull_mode;
 	ColorMapping color_mapping;
-	rgb  surface_color;
+	rgb surface_color;
 	IlluminationMode illumination_mode;
 
 	bool show_vertices = false;
@@ -106,9 +109,23 @@ protected:
 	cone_render_style cone_style;
 	attribute_array_manager cone_aam;
 
+	////
+	// 3D Image Warp baseline testing fields
+
+	// Render targets for each fully rendered view
+	cgv::render::texture render_color[3];        // we allocate enough for
+	cgv::render::render_buffer render_depth[3];  // 3 viewpoints: 0-left,
+	cgv::render::frame_buffer render_fbo[3];     // 1-center, 2-right
+
+	// Mesh for the heightmap geometry (actually the same for all three views,
+	// since the topology never changes!)
+	mesh_type heightmap;
+	cgv::render::mesh_render_info heightmap_info;
+	
+
 public:
 	/// the constructor
-	mesh_viewer() : node("mesh_viewer")
+	mesh_viewer() : node("mesh_viewer"), render_depth{"[D]", "[D]", "[D]"}
 	{
 		cull_mode = CM_BACKFACE;
 		color_mapping = cgv::render::CM_COLOR;
@@ -246,6 +263,33 @@ public:
 	/// methods
 	void init_frame(context &ctx)
 	{
+		////
+		// SECTION: 3D image warping baseline test
+
+		// convenience shortcuts
+		const unsigned width = ctx.get_width(), height = ctx.get_height();
+
+		// Check if render fbo needs re-initialization (we always change all 3 at the same time, so we just check the center one)
+		if (!render_fbo[1].is_created() || render_fbo[1].get_width() != width || render_fbo[1].get_height() != height)
+		{
+			// (re-)initialize all three fbos and associated resources
+			for (unsigned i=0; i<3; i++)
+			{
+				render_fbo[i].destruct(ctx);
+				render_color[i].destruct(ctx);
+				render_depth[i].destruct(ctx);
+				render_color[i].create(ctx, TT_2D, width, height);
+				render_depth[i].create(ctx, width, height);
+				render_fbo[i].create(ctx, width, height);
+				render_fbo[i].attach(ctx, render_color[i]);
+				render_fbo[i].attach(ctx, render_depth[i]);
+			}
+		}
+
+		// END: 3D image warping baseline test
+		////
+
+
 		if (update_view_after_mesh_processed)
 		{
 			// focus view on new mesh
@@ -300,6 +344,16 @@ public:
 	/// the "main" draw method
 	void draw(context &ctx)
 	{
+		////
+		// SECTION: 3D image warping baseline test
+
+		// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
+		//          initial mono depth map test case)
+
+		// END: 3D image warping baseline test
+		////
+
+
 		if (show_vertices)
 		{
 			sphere_renderer &sr = ref_sphere_renderer(ctx);
@@ -319,6 +373,22 @@ public:
 		}
 		if (show_surface)
 			draw_surface(ctx, true);
+
+		
+		////
+		// SECTION: 3D image warping baseline test
+
+		// --NOTE-- Disable the render_fbo to make the "main" framebuffer active again.
+		//          Render a single test view (e.g. selectable via GUI) by rendering the
+		//          heightmap mesh using the corresponding transformation while the color
+		//          and depth buffer for the central view are actively bound to the appropriate
+		//          texture units (so the vertex shader can offset and color the vertices
+		//          accordingly).
+		//          For the other warping approaches, you would only draw a screen quad (see
+		//          holo_view_interactor!) and the fragment shader would do the main work
+
+		// END: 3D image warping baseline test
+		////
 	}
 
 	/// perform any kind of operation that should take place after all drawables have executed their ::draw()
