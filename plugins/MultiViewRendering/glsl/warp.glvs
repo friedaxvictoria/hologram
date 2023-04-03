@@ -10,7 +10,7 @@ uniform vec3 y_max = vec3(2150.0f);
 
 uniform mat4 mvp_current;
 uniform mat4 mvp_left; 
-unifrom mat4 mvp_right;
+uniform mat4 mvp_right;
 
 uniform uint num_views = 45u;
 
@@ -19,8 +19,10 @@ uniform uint view;
 uniform sampler2D depth_tex;
 uniform sampler2D colour_tex;
 
-float calc_coord(min, max){
-	min + view * (max - min) / num_views;
+out vec4 colour;
+
+float calc_coord(float min, float max){
+	return min + view * (max - min) / num_views;
 }
 
 void main()
@@ -30,7 +32,7 @@ void main()
 	float x = calc_coord(x_min.x, x_max.x);
 	float y = calc_coord(y_min.x, y_max.x);
 
-	vec4 ndc_curr = vec4(2/width * (gl_FragCoord.x - x) - 1, 2/height * (gl_FragCoord.y - y) - 1, 2 * gl_FragCoord.z - 1, 1);
+	vec4 ndc_curr = vec4(2.0f/width * (gl_Position.x - x) - 1.0f, 2.0f/height * (gl_Position.y - y) - 1.0f, 2 * gl_Position.z - 1.0f, 1.0f);
 
 	//calculate position of point in left view
 	vec4 clip_0 = mvp_left * mvp_current_inv * ndc_curr;
@@ -42,15 +44,17 @@ void main()
 	vec3 ndc_1 = clip_1.xyz / clip_1.w;
 	vec2 look_up_1 = 1/2 * vec2(ndc_1.x + 1, ndc_1.y + 1);
 
-	vec3 depth_0 =texture(depth_tex,look_up_0);
-	vec3 depth_1 =texture(depth_tex,look_up_1);
+	vec4 depth_0 =texture(depth_tex,look_up_0);
+	vec4 depth_1 =texture(depth_tex,look_up_1);
 
-	vec3 colour_0 =texture(colour_tex,look_up_0);
-	vec3 colour_1 =texture(colour_tex,look_up_1);
+	vec4 colour_0 =texture(colour_tex,look_up_0);
+	vec4 colour_1 =texture(colour_tex,look_up_1);
 
-	if (depth_0 > depth_1){
-		color = colour_0;
+	if (depth_0.x > depth_1.x){
+		colour = colour_0;
 	} else{
-		color = colour_1;
+		colour = colour_1;
 	}
+
+	gl_Position = vec4(0,0,0,0);
 }

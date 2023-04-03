@@ -7,9 +7,6 @@ set(SHADERS
 	glsl/quilt_finish.glpr
 	glsl/volume_finish.glfs
 	glsl/volume_finish.glpr
-	glsl/warp.glfs
-	glsl/warp.glvs
-	glsl/warp.glpr
 )
 
 cgv_add_target(crg_holo_view
