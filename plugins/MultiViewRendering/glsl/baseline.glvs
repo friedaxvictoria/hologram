@@ -1,0 +1,29 @@
+#version 150
+
+in vec4 position;
+
+uniform uint rendered_view = 22u;
+uniform uint current_view;
+//uniform float view_width; 
+
+//uniform vec3 eye_pos_current;
+//uniform vec3 eye_pos_rendered;
+
+uniform sampler2D depth_tex;
+uniform sampler2D colour_tex;
+
+out vec4 sampled_col;
+
+void main()
+{
+	//float view_pos = current_view / view_width;
+	//float rendered_pos = rendered_view / view_width;
+
+	//float disparity = rendered_pos - view_pos;
+	vec4 depth = texture(depth_tex, position.xy);
+
+	//float new_depth = length(position.xyz - eye_pos_current.xyz);
+
+	sampled_col = vec4(texture(colour_tex, position.xy));
+	gl_Position = vec4(0,0,0,0);
+}

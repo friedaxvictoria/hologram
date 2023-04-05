@@ -1,0 +1,10 @@
+#version 150
+
+in vec4 sampled_col;
+
+out vec4 colour;
+
+void main()
+{
+	colour = sampled_col;
+}

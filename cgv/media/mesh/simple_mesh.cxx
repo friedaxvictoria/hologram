@@ -598,6 +598,7 @@ unsigned simple_mesh<T>::extract_vertex_attribute_buffer(
 	attrib_buffer.resize(nr_floats*unique_quadruples.size());
 	T* data_ptr = &attrib_buffer.front();
 	for (auto t : unique_quadruples) {
+		//Error is thrown here
 		*reinterpret_cast<vec3*>(data_ptr) = positions[t[0]];
 		data_ptr += 3;
 		if (include_tex_coords) {

@@ -100,6 +100,7 @@ class mesh_viewer : public node, public drawable, public provider
 	ColorMapping color_mapping;
 	rgb surface_color;
 	IlluminationMode illumination_mode;
+	int visible_view = 22;
 
 	bool show_vertices = false;
 	sphere_render_style sphere_style;
@@ -121,6 +122,8 @@ class mesh_viewer : public node, public drawable, public provider
 	// since the topology never changes!)
 	mesh_type heightmap;
 	cgv::render::mesh_render_info heightmap_info;
+
+	cgv::render::shader_program baseline_prog;
 	
 
 public:
@@ -151,10 +154,10 @@ public:
 	}
 
 	/// helper function that acts as a single point where processing of the mesh into a renderable form is happening
-	void process_mesh_for_rendering(context &ctx, bool update_view=true)
+	void process_mesh_for_rendering(context& ctx, bool update_view = true)
 	{
 		// adjust size of vertex and edge glyphs to loaded mesh
-		sphere_style.radius = float(0.05*sqrt(M.compute_box().get_extent().sqr_length() / M.get_nr_positions()));
+		sphere_style.radius = float(0.05 * sqrt(M.compute_box().get_extent().sqr_length() / M.get_nr_positions()));
 		on_set(&sphere_style.radius);
 		cone_style.radius = 0.5f * sphere_style.radius;
 		on_set(&cone_style.radius);
@@ -175,7 +178,7 @@ public:
 		mesh_info.bind_wireframe(ctx, ref_cone_renderer(ctx).ref_prog(), true);
 
 		// update sphere attribute array manager
-		sphere_renderer &sr = ref_sphere_renderer(ctx);
+		sphere_renderer& sr = ref_sphere_renderer(ctx);
 		sr.enable_attribute_array_manager(ctx, sphere_aam);
 		sr.set_position_array(ctx, M.get_positions());
 		if (M.has_colors())
@@ -183,6 +186,44 @@ public:
 
 		// adjust camera parameters when requested
 		update_view_after_mesh_processed |= update_view;
+
+		// tessellation of heightmap
+		// add positions to mesh - one position for each pixel
+		for (int x = 0; x < ctx.get_width(); ++x) {
+			for (int y = 0; y < ctx.get_height(); ++y) {
+				heightmap.new_position(vec3((float const&)x, (float const&)y, 0));
+			}
+		}
+
+		// create indices for a quad mesh
+		std::vector<int> indices;
+		for (int x = 0; x < ctx.get_width() - 1; ++x) {
+			for (int y = 0; y < ctx.get_height()-1; ++y) {
+				indices.push_back(x * (ctx.get_height()+1) + y);
+				indices.push_back((x + 1) * (ctx.get_height()+1) + y);
+				indices.push_back(x * (ctx.get_height() + 1) + y+1);
+				indices.push_back((x + 1) * (ctx.get_height() + 1) + y+1);
+			}
+		}
+
+		// create faces for the quad mesh based off of the indices
+		int i = 0;
+		for (int fi = 0; fi < (ctx.get_width() - 1) * (ctx.get_height()-1); ++fi) {
+			heightmap.start_face();
+			for (int ci = 0; ci < 4; ++ci) {
+				heightmap.new_corner(indices[i], fi);
+				i++;
+			}
+		}
+
+		// compute heightmap and bind it to the baseline program
+		heightmap_info.destruct(ctx);
+		heightmap_info.construct(ctx, heightmap);
+		heightmap_info.bind(ctx, baseline_prog, true);
+		
+
+	
+
 
 		// ensure that materials are presented in gui
 		post_recreate_gui();
@@ -245,6 +286,9 @@ public:
 
 		// in the blank state (without anything loaded), we just display a simple Conway polyhedron
 		create_conway_polyhedron();
+
+		if (!baseline_prog.build_program(ctx, "baseline.glpr", true))
+			return false;
 
 		// repost success
 		return true;
@@ -353,6 +397,8 @@ public:
 		// END: 3D image warping baseline test
 		////
 
+		render_fbo[1].enable(ctx, 0);
+		render_fbo[1].push_viewport(ctx);
 
 		if (show_vertices)
 		{
@@ -389,6 +435,18 @@ public:
 
 		// END: 3D image warping baseline test
 		////
+
+		render_fbo[1].disable(ctx);
+
+		shader_program& prog = baseline_prog;
+		prog.set_attribute(ctx, 0, heightmap.get_positions());
+		prog.set_uniform(ctx, "current_view", visible_view);
+		prog.set_uniform(ctx, "depth_tex", render_depth[1]);
+		prog.set_uniform(ctx, "colour_tex", render_color[1]);
+
+		prog.enable(ctx);
+		heightmap_info.draw_all(ctx);
+		prog.disable(ctx);
 	}
 
 	/// perform any kind of operation that should take place after all drawables have executed their ::draw()
@@ -477,6 +535,10 @@ public:
 			align("\b");
 			end_tree_node(show_surface);
 		}
+		add_decorator("", "separator");
+
+		add_decorator("Heightfield", "heading", "level=2");
+		add_member_control(this, "visible view", visible_view, "value_slider", "min=0;max=44;ticks=true");
 	}
 };
 
