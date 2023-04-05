@@ -2,28 +2,56 @@
 
 in vec4 position;
 
-uniform uint rendered_view = 22u;
-uniform uint current_view;
-//uniform float view_width; 
+uniform float width;
+uniform float height;
 
-//uniform vec3 eye_pos_current;
-//uniform vec3 eye_pos_rendered;
+uniform uint current_view;
+
+uniform vec3 eye_pos_current;
+uniform vec3 eye_pos_rendered;
 
 uniform sampler2D depth_tex;
 uniform sampler2D colour_tex;
+
+uniform mat4 mvp_source;
+uniform mat4 mvp_target;
+uniform mat4 mvpw_source;
+uniform mat4 mvpw_target;
+
+uniform int warping_mode;
 
 out vec4 sampled_col;
 
 void main()
 {
-	//float view_pos = current_view / view_width;
-	//float rendered_pos = rendered_view / view_width;
+	vec2 tex_coords_source = vec2(position.x/width, position.y/height);
+	vec4 depth_source = texture(depth_tex, tex_coords_source);
+	vec3 pos_source = vec3(position.xy, depth_source);
 
-	//float disparity = rendered_pos - view_pos;
-	vec4 depth = texture(depth_tex, position.xy);
+	//only recomputing depth
+	if (warping_mode==0){
+		float depth_target = length(pos_source - eye_pos_current.xyz);
 
-	//float new_depth = length(position.xyz - eye_pos_current.xyz);
+		sampled_col = texture(colour_tex, tex_coords_source);
+		gl_Position = vec4(position.x, position.y, depth_target, 1.0);
+	}
 
-	sampled_col = vec4(texture(colour_tex, position.xy));
-	gl_Position = vec4(0,0,0,0);
+	//using inverse mvpw matrices 
+	else if (warping_mode==1){
+		sampled_col = texture(colour_tex, tex_coords_source);
+		gl_Position = mvpw_target * inverse(mvpw_source) * source_pos;
+	}
+
+	//idea from sci vis lecture
+	else if (warping_mode==2){
+		vec4 ndc_source = vec4(2/width * (source_pos.x - x) - 1, 2/height * (source_pos.y - y) - 1, 2 * source_pos.z - 1, 1.0);
+		vec4 clip_target = mvp_target * inverse(mvp_source) * ndc_source;
+		vec3 ndc_target = vec3(clip_target.xyz/clip_target.w);
+		vec2 tex_coords_target = 1/2 vec2(ndc_target.x - 1, ndc_target.y - 1);
+
+		float depth_target = texture(depth_tex, tex_coords_target).x;
+
+		sampled_col = texture(colour_tex, tex_coords_target);
+		gl_Position = vec4(position.x, position.y, depth_target, 1.0);
+	}
 }

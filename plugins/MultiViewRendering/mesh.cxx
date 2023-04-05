@@ -80,6 +80,8 @@ in the examples plugin. More image formats are provided by the the cmi_devIL plu
 only part of the cgv_support project tree available on demand.
 */
 
+enum WarpingMode { SIMPLE_INTERPOLATION, SIMPLE_WARPING };
+
 class mesh_viewer : public node, public drawable, public provider
 {
   public:
@@ -88,6 +90,8 @@ class mesh_viewer : public node, public drawable, public provider
 	typedef mesh_type::vec3i vec3i;
 
   protected:
+	clipped_view* view_ptr;
+
 	std::string mesh_filename;
 	mesh_type M;
 	cgv::render::mesh_render_info mesh_info;
@@ -100,7 +104,6 @@ class mesh_viewer : public node, public drawable, public provider
 	ColorMapping color_mapping;
 	rgb surface_color;
 	IlluminationMode illumination_mode;
-	int visible_view = 22;
 
 	bool show_vertices = false;
 	sphere_render_style sphere_style;
@@ -124,7 +127,11 @@ class mesh_viewer : public node, public drawable, public provider
 	cgv::render::mesh_render_info heightmap_info;
 
 	cgv::render::shader_program baseline_prog;
-	
+
+	vec3 render_eye_position;
+	double y_extend;
+	int visible_view = 22;
+	WarpingMode warping_mode;	
 
 public:
 	/// the constructor
@@ -134,6 +141,7 @@ public:
 		color_mapping = cgv::render::CM_COLOR;
 		surface_color = rgb(0.75f, 0.25f, 1.0f);
 		illumination_mode = IM_ONE_SIDED;
+		warping_mode = SIMPLE_INTERPOLATION;
 
 		sphere_style.surface_color = rgb(0.8f, 0.3f, 0.3f);
 		cone_style.surface_color = rgb(0.6f, 0.5f, 0.4f);
@@ -217,9 +225,9 @@ public:
 		}
 
 		// compute heightmap and bind it to the baseline program
-		heightmap_info.destruct(ctx);
+		/* heightmap_info.destruct(ctx);
 		heightmap_info.construct(ctx, heightmap);
-		heightmap_info.bind(ctx, baseline_prog, true);
+		heightmap_info.bind(ctx, baseline_prog, true);*/
 		
 
 	
@@ -337,7 +345,8 @@ public:
 		if (update_view_after_mesh_processed)
 		{
 			// focus view on new mesh
-			clipped_view *view_ptr = dynamic_cast<clipped_view*>(find_view_as_node());
+			view_ptr = dynamic_cast<clipped_view*>(find_view_as_node());
+
 			if (view_ptr)
 			{
 				box3 box = M.compute_box();
@@ -400,6 +409,22 @@ public:
 		render_fbo[1].enable(ctx, 0);
 		render_fbo[1].push_viewport(ctx);
 
+		render_eye_position = view_ptr->get_eye();
+		y_extend = view_ptr->get_y_extent_at_depth(render_eye_position[0], true);
+
+		float aspect = (visible_view / 22.0 - 1.0);
+		float offset_for_current_view = y_extend * aspect;
+		vec3 current_eye_position =
+			  vec3(render_eye_position[0] + offset_for_current_view, render_eye_position[1], render_eye_position[2]);
+
+		auto MVPW_source = ctx.get_modelview_projection_window_matrix(), 
+			MVP_source = ctx.get_modelview_matrix() * ctx.get_projection_matrix();
+		view_ptr->set_eye_keep_extent(vec3(render_eye_position[0] + offset_for_current_view, render_eye_position[1],
+									  render_eye_position[2]));
+		auto MVPW_target = ctx.get_modelview_projection_window_matrix(),
+			 MVP_target = ctx.get_modelview_matrix() * ctx.get_projection_matrix();
+		view_ptr->set_eye_keep_extent(render_eye_position);
+
 		if (show_vertices)
 		{
 			sphere_renderer &sr = ref_sphere_renderer(ctx);
@@ -438,15 +463,25 @@ public:
 
 		render_fbo[1].disable(ctx);
 
-		shader_program& prog = baseline_prog;
+		/* shader_program& prog = baseline_prog;
 		prog.set_attribute(ctx, 0, heightmap.get_positions());
+		prog.set_uniform(ctx, "mvpw_source", MVPW_source);
+		prog.set_uniform(ctx, "mvpw_target", MVPW_target);
+		prog.set_uniform(ctx, "mvp_source", MVP_source);
+		prog.set_uniform(ctx, "mvp_target", MVP_target);
+		prog.set_uniform(ctx, "width", (float)ctx.get_width());
+		prog.set_uniform(ctx, "height", (float)ctx.get_height());
+		prog.set_uniform(ctx, "eye_pos_rendered", render_eye_position);
+		prog.set_uniform(ctx, "eye_pos_current", current_eye_position);
 		prog.set_uniform(ctx, "current_view", visible_view);
 		prog.set_uniform(ctx, "depth_tex", render_depth[1]);
 		prog.set_uniform(ctx, "colour_tex", render_color[1]);
+		prog.set_uniform(ctx, "warping_mode", (int)warping_mode);
 
 		prog.enable(ctx);
 		heightmap_info.draw_all(ctx);
 		prog.disable(ctx);
+		*/
 	}
 
 	/// perform any kind of operation that should take place after all drawables have executed their ::draw()
@@ -539,6 +574,7 @@ public:
 
 		add_decorator("Heightfield", "heading", "level=2");
 		add_member_control(this, "visible view", visible_view, "value_slider", "min=0;max=44;ticks=true");
+		add_member_control(this, "warping mode", warping_mode, "dropdown", "enums='simple interpolation, simple warping'");
 	}
 };
 
