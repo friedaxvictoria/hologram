@@ -942,7 +942,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	if (!volume_prog.build_program(ctx, "volume_finish.glpr", true))
 		return false;
 	if (!warp_prog.build_program(ctx, "warp.glpr", true))
-		std::cout << "warp program not build" << std::endl;
 		return false;
 	return true;
 }
@@ -1260,30 +1259,6 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		}
 	}
 
-	// determine aspect ratio from opengl settings
-	/*GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
-
-	// compute the clipping planes based on the eye and scene extent
-	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
-	if (rpf & RPF_SET_PROJECTION)
-		gl_set_projection_matrix(ctx, current_e, aspect);
-
-	if (rpf & RPF_SET_MODELVIEW)
-		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-
-	if (current_e == GLSU_RIGHT) {
-		MPW_right = ctx.get_modelview_projection_window_matrix();
-		if (do_viewport_splitting)
-			MPWs_right = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW_right);
-	}
-	else {
-		MPW = ctx.get_modelview_projection_window_matrix();
-		if (do_viewport_splitting)
-			MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
-	}
-
 
 	if (generate_hologram) {
 		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width || display_fbo.get_height() != display_calib.height) {
@@ -1347,7 +1322,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			volume_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0); // --NOTE-- change to volume_holo_tex once ready
 			volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
-	}*/
+	}
 }
 
 
