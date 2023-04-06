@@ -1,0 +1,60 @@
+#version 150
+
+uniform uint width = 3840u;
+uniform uint height = 2160u;
+
+uniform vec3 x_min = vec3(10.0f);
+uniform vec3 x_max = vec3(3830.0f);
+uniform vec3 y_min = vec3(10.0f);
+uniform vec3 y_max = vec3(2150.0f);
+
+uniform mat4 mvp_current;
+uniform mat4 mvp_left; 
+uniform mat4 mvp_right;
+
+uniform uint num_views = 45u;
+
+uniform uint view;
+
+uniform sampler2D depth_tex;
+uniform sampler2D colour_tex;
+
+out vec4 colour;
+
+float calc_coord(float min, float max){
+	return min + view * (max - min) / num_views;
+}
+
+void main()
+{
+	mat4 mvp_current_inv = inverse(mvp_current);
+
+	float x = calc_coord(x_min.x, x_max.x);
+	float y = calc_coord(y_min.x, y_max.x);
+
+	vec4 ndc_curr = vec4(2.0f/width * (gl_Position.x - x) - 1.0f, 2.0f/height * (gl_Position.y - y) - 1.0f, 2 * gl_Position.z - 1.0f, 1.0f);
+
+	//calculate position of point in left view
+	vec4 clip_0 = mvp_left * mvp_current_inv * ndc_curr;
+	vec3 ndc_0 = clip_0.xyz / clip_0.w;
+	vec2 look_up_0 = 1/2 * vec2(ndc_0.x + 1, ndc_0.y + 1);
+
+	//calculate position of point in right view
+	vec4 clip_1 = mvp_right * mvp_current_inv * ndc_curr;
+	vec3 ndc_1 = clip_1.xyz / clip_1.w;
+	vec2 look_up_1 = 1/2 * vec2(ndc_1.x + 1, ndc_1.y + 1);
+
+	vec4 depth_0 =texture(depth_tex,look_up_0);
+	vec4 depth_1 =texture(depth_tex,look_up_1);
+
+	vec4 colour_0 =texture(colour_tex,look_up_0);
+	vec4 colour_1 =texture(colour_tex,look_up_1);
+
+	if (depth_0.x > depth_1.x){
+		colour = colour_0;
+	} else{
+		colour = colour_1;
+	}
+
+	gl_Position = vec4(0,0,0,0);
+}

@@ -1,0 +1,22 @@
+@=
+projectType="application_plugin";
+projectName="multi_view_rendering";
+projectGUID="3f8c8791-fab4-11ad-87af-0800210c9a69";
+addProjectDirs=[CGV_DIR."/libs", CGV_DIR."/plugins", CGV_DIR."/3rd"];
+addIncDirs=[CGV_DIR."/libs", [CGV_DIR."/libs/glsu", "all"], [INPUT_DIR, "all"], CGV_BUILD_DIR."/".projectName];
+addProjectDeps=[
+	"cgv_utils", "cgv_type", "cgv_reflect", "cgv_data", "cgv_signal", "cgv_base", "cgv_media", 
+	"cgv_gui", "cgv_render","cgv_os", "fltk", "cgv_gl", "cgv_proc", "plot", "glew", "cgv_viewer",
+	"cg_fltk", "cg_ext", "crg_light", "cg_meta", "cmi_io","cmv_avi", "crg_grid", "co_web",
+	"cg_gamepad", "cmf_tt_gl_font", "cgv_g2d", "cgv_gpgpu", "cgv_app", "cgv_post"
+];
+addSharedDefines=["MULTI_VIEW_RENDERING_EXPORTS"];
+addStaticDefines=["REGISTER_SHADER_FILES"];
+addShaderPaths=[[INPUT_DIR,"all"]];
+cppLanguageStandard="stdcpp17";
+useOpenMP=1;
+workingDirectory=INPUT_DIR;
+addCommandLineArguments=[
+	'config:"'.INPUT_DIR.'/config.def"',
+	after("SHADER_PATHS", "cg_fltk")
+];
