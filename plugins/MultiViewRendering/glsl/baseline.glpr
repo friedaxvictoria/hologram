@@ -1,2 +1,3 @@
 vertex_file:baseline.glvs
 fragment_file:baseline.glfs
+fragment_file:fragment.glfs
