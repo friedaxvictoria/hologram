@@ -1,8 +1,34 @@
-#version 150
+#version 430
 
-in vec4 position;
+layout(location = 0) in vec4 position;
+layout(location = 3) in vec2 texcoord;
+
+layout (binding=0) uniform sampler2D colour_tex;
+layout (binding=1) uniform sampler2D depth_tex;
+
+uniform mat4 proj_mat_rendered;
+uniform mat4 proj_mat_target;
+uniform mat4 modelview_proj_mat_target;
+
+mat4 get_modelview_matrix();
+mat4 get_projection_matrix();
+mat4 get_modelview_projection_matrix();
+mat3 get_normal_matrix();
+
+out vec2 texcoord_fs;
 
 void main()
-{
-	gl_Position = position;
+{	
+	// transform vertex to clip space
+	
+	float depth_source = texture2D(depth_tex, texcoord).z;
+	vec3 pos_source = vec3(position.xy, depth_source);
+
+	vec4 depth_transformed = get_projection_matrix()*inverse(proj_mat_rendered)*vec4(pos_source, 1.0);
+	vec4 position_transformed = get_modelview_projection_matrix()*position;
+
+	texcoord_fs = texcoord;
+	gl_Position = vec4(position_transformed.xy, depth_transformed.z, position_transformed.w);
+	
+	//gl_Position = position;
 }

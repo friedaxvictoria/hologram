@@ -1,63 +1,34 @@
-#version 150
+#version 430
+
+in vec2 texcoord_fs;
 
 uniform float width;
 uniform float height;
 
-uniform uint current_view;
+layout (binding=0) uniform sampler2D colour_tex;
+layout (binding=1) uniform sampler2D depth_tex;
 
-uniform vec3 eye_pos_current;
-uniform vec3 eye_pos_rendered;
+uniform mat4 proj_mat_rendered;
+uniform mat4 inv_modelview_mat_rendered;
 
-uniform sampler2D colour_tex;
-uniform sampler2D depth_tex;
+out vec4 frag_colour;
 
-uniform mat4 mvp_source;
-uniform mat4 mvp_target;
-uniform mat4 mvpw_source;
-uniform mat4 mvpw_target;
+mat4 get_modelview_projection_matrix();
 
-uniform int warping_mode;
 
-//for later to indentify
-int x = 0;
-int y = 0;
-
-void finish_fragment(vec4 color);
-void finish_fragment(vec4 color, float depth);
 
 void main()
-{
-	vec2 tex_coords_source = vec2(gl_FragCoord.x/width, gl_FragCoord.y/height);
-	vec4 depth_source = texture2D(depth_tex, tex_coords_source);
-	vec3 pos_source = vec3(gl_FragCoord.xy, depth_source);
-
-	vec4 sampled_col = texture2D(colour_tex, tex_coords_source);
-
-	//only recomputing depth
-	if (warping_mode==1){
-		float depth_target = length(pos_source - eye_pos_current.xyz);
-
-		sampled_col = texture(colour_tex, tex_coords_source);
-		//gl_FragColor = vec4(depth_source.z, depth_source.z,depth_source.z,1.0);
-		finish_fragment(sampled_col, depth_target);
-	}
-	//using inverse mvpw matrices 
-	else if (warping_mode==2){
-		sampled_col = texture(colour_tex, tex_coords_source);
-		vec4 position_target = mvpw_target * inverse(mvpw_source) * vec4(pos_source, 1.0);
-		finish_fragment(sampled_col, position_target.z);
-	}
+{	
+	frag_colour = texture2D(colour_tex, texcoord_fs);
+	
 
 	//idea from sci vis lecture
-	else if (warping_mode==3){
-		vec4 ndc_source = vec4(2/width * (pos_source.x - x) - 1, 2/height * (pos_source.y - y) - 1, 2 * pos_source.z - 1, 1.0);
-		vec4 clip_target = mvp_target * inverse(mvp_source) * ndc_source;
-		vec3 ndc_target = vec3(clip_target.xyz/clip_target.w);
-		vec2 tex_coords_target = 1/2 * vec2(ndc_target.x - 1, ndc_target.y - 1);
+	/*vec4 ndc_source = vec4(2/width * (gl_FragCoord.x - 0) - 1, 2/height * (gl_FragCoord.y - 0) - 1, 2 * gl_FragCoord.z - 1, 1.0);
+	vec4 clip_target = get_modelview_projection_matrix() * inv_modelview_mat_rendered * inverse(proj_mat_rendered) * ndc_source;
+	vec3 ndc_target = vec3(clip_target.xyz/clip_target.w);
+	vec2 tex_coords_target = 1/2 * vec2(ndc_target.x - 1, ndc_target.y - 1);
 
-		float depth_target = texture(depth_tex, tex_coords_target).x;
+	gl_FragDepth = texture(depth_tex, tex_coords_target).x;
 
-		sampled_col = texture(colour_tex, tex_coords_target);
-		finish_fragment(sampled_col, depth_target);
-	}
+	frag_colour = texture(colour_tex, tex_coords_target);*/
 }

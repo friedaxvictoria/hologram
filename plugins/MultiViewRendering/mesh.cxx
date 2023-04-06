@@ -155,6 +155,7 @@ class mesh_viewer : public node, public drawable, public provider
 
 	cgv::render::shader_program baseline_prog;
 
+	mat4 proj_mat_rendered;
 	vec3 render_eye_position;
 	double y_extend;
 	int visible_view = 22;
@@ -421,9 +422,11 @@ public:
 		glCullFace(cull_face);
 	}
 
+
 	/// the "main" draw method
 	void draw(context &ctx)
 	{
+		mat4 invMV;
 		// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
 		//          initial mono depth map test case)
 		if (test.shoot_heightmap) {
@@ -435,7 +438,7 @@ public:
 			// move the heightmap to the correct place in world-space
 			// - determine the camera orientation
 			static const vec3 right_local(1, 0, 0);
-			const mat4 invMV = inv(ctx.get_modelview_matrix());
+			invMV = inv(ctx.get_modelview_matrix());
 			const vec3 cam_pos = view->get_eye(), cam_dir = view->get_view_dir(),
 					   cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
 					   cam_up = view->get_view_up_dir(); // --CAREFUL-- get_view_up_dir is not 100% reliable, consider
@@ -454,8 +457,8 @@ public:
 			// change projection matrix to orthogonal according to the current (view-dependent) extends of our heightmap
 			ctx.push_projection_matrix();
 			const float x_ext_half = .5f * x_ext, y_ext_half = .5f * y_ext, znear = bmin - cam_depth_world;
-			ctx.set_projection_matrix(
-				  ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye));
+			proj_mat_rendered = ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye);
+			ctx.set_projection_matrix(proj_mat_rendered);
 		}
 
 		// END: 3D image warping baseline test
@@ -464,18 +467,17 @@ public:
 		render_eye_position = view->get_eye();
 		y_extend = view->get_y_extent_at_depth(render_eye_position[0], true);
 
-		float aspect = (visible_view / 22.0 - 1.0);
-		float offset_for_current_view = y_extend * aspect;
+		float offset = (visible_view / 22.0 - 1.0);
+		float offset_for_current_view = y_extend * offset;
 		vec3 current_eye_position =
 			  vec3(render_eye_position[0] + offset_for_current_view, render_eye_position[1], render_eye_position[2]);
 
-		mat4 MVPW_source = ctx.get_modelview_projection_window_matrix(), 
-			MVP_source = ctx.get_modelview_matrix() * ctx.get_projection_matrix();
-		view->set_eye_keep_extent(vec3(render_eye_position[0] + offset_for_current_view, render_eye_position[1],
-									  render_eye_position[2]));
-		mat4 MVPW_target = ctx.get_modelview_projection_window_matrix(),
-			 MVP_target = ctx.get_modelview_matrix() * ctx.get_projection_matrix();
-		view->set_eye_keep_extent(render_eye_position);
+		//view->set_eye_keep_extent(current_eye_position);
+
+		mat4 proj_target = ctx.get_projection_matrix(),
+			 modelview_proj_target = ctx.get_modelview_matrix() * proj_target;
+
+		//view->set_eye_keep_extent(render_eye_position);
 
 		if (show_vertices)
 		{
@@ -527,24 +529,21 @@ public:
 		}
 
 		if (test.render_heightmap) {
-			static const rgb white(1, 1, 1);
-			shader_program& default_shader = ctx.ref_default_shader_program(true /* <-- texture support */);
+			//static const rgb white(1, 1, 1);
+			//shader_program& default_shader = ctx.ref_default_shader_program(true /* <-- texture support */);
 			shader_program& prog = baseline_prog;
 			texture &color_tex = *test.render_fbo[1].attachment_texture_ptr("color"),
 					&depth_tex = *test.render_fbo[1].attachment_texture_ptr("depth");
 
-			prog.set_uniform(ctx, "mvpw_source", MVPW_source);
-			prog.set_uniform(ctx, "mvpw_target", MVPW_target);
-			prog.set_uniform(ctx, "mvp_source", MVP_source);
-			prog.set_uniform(ctx, "mvp_target", MVP_target);
+			prog.set_uniform(ctx, "proj_mat_rendered", proj_mat_rendered);
+			prog.set_uniform(ctx, "proj_mat_target", proj_target);
+			prog.set_uniform(ctx, "modelview_proj_mat_target", modelview_proj_target);
+			prog.set_uniform(ctx, "inv_modelview_mat_rendered", invMV);
 			prog.set_uniform(ctx, "width", (float)ctx.get_width());
 			prog.set_uniform(ctx, "height", (float)ctx.get_height());
 			prog.set_uniform(ctx, "eye_pos_rendered", render_eye_position);
 			prog.set_uniform(ctx, "eye_pos_current", current_eye_position);
 			prog.set_uniform(ctx, "current_view", visible_view);
-			//prog.set_uniform(ctx, "depth_tex", depth_tex);
-			//prog.set_uniform(ctx, "colour_tex", color_tex);
-			prog.set_uniform(ctx, "warping_mode", (int)warping_mode);
 
 			//default_shader.enable(ctx);
 			prog.enable(ctx);
@@ -553,7 +552,7 @@ public:
 			glDisable(GL_CULL_FACE);
 			ctx.push_modelview_matrix();
 			ctx.mul_modelview_matrix(test.heightmap_trans);
-			ctx.set_color(white); // make sure our color texture has a white background for correct results
+			//ctx.set_color(white); // make sure our color texture has a white background for correct results
 								  // with the default shader (might not be needed with your custom shader)
 			test.heightmap.draw(ctx);
 			ctx.pop_modelview_matrix();
