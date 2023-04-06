@@ -477,7 +477,7 @@ public:
 		prog.set_uniform(ctx, "depth_tex", render_depth[1]);
 		prog.set_uniform(ctx, "colour_tex", render_color[1]);
 		prog.set_uniform(ctx, "warping_mode", (int)warping_mode);
-
+		
 		prog.enable(ctx);
 		heightmap_info.draw_all(ctx);
 		prog.disable(ctx);
