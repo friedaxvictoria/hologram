@@ -1,34 +1,90 @@
-#version 430
+#version 330 core
 
-layout(location = 0) in vec4 position;
-layout(location = 3) in vec2 texcoord;
-
-layout (binding=0) uniform sampler2D colour_tex;
-layout (binding=1) uniform sampler2D depth_tex;
-
-uniform mat4 proj_mat_rendered;
-uniform mat4 proj_mat_target;
-uniform mat4 modelview_proj_mat_target;
-
+/***** begin interface of view.glsl ***********************************/
 mat4 get_modelview_matrix();
 mat4 get_projection_matrix();
 mat4 get_modelview_projection_matrix();
+mat4 get_inverse_modelview_matrix();
+mat4 get_inverse_modelview_projection_matrix();
 mat3 get_normal_matrix();
+mat3 get_inverse_normal_matrix();
+/***** end interface of view.glsl ***********************************/
 
-out vec2 texcoord_fs;
+uniform sampler2D color;
+uniform sampler2D depth;
+
+uniform mat4 inv_proj_source;
+uniform mat4 original_modelview;
+
+in vec4 position;
+in vec2 texcoord;
+
+out vec4 color_fs;
+out float discard_fs;
+
 
 void main()
-{	
-	// transform vertex to clip space
-	
-	float depth_source = texture2D(depth_tex, texcoord).z;
-	vec3 pos_source = vec3(position.xy, depth_source);
+{
+	color_fs = textureLod(color, texcoord, 0);	// textureLod does not determine mip levels itself and is thus
+	                                            // a bit faster than texture().
 
-	vec4 depth_transformed = get_projection_matrix()*inverse(proj_mat_rendered)*vec4(pos_source, 1.0);
-	vec4 position_transformed = get_modelview_projection_matrix()*position;
+	float depth = textureLod(depth, texcoord, 0).r;
+	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
 
-	texcoord_fs = texcoord;
-	gl_Position = vec4(position_transformed.xy, depth_transformed.z, position_transformed.w);
+
+	// Our modelview matrix that transforms the heightmap into the eye space of the target view has some scaling
+	// in it. The reason for that can be explained as follows:
+	// (1) To make maximum use of the heightmap's resolution, we position the "ground" plane z_far as close to the
+	//     backmost scene vertex as possible. Thus, the distance to said plane changes depending on the camera
+	//     position.
+	// (2) To capture all potentially visible scene elements, we have to chose the size of the quad such that it
+	//     exactly fits inside the frustum, touching the side clipping planes.
+	// (3) Points (1) and (2) imply that the "physical" extents of the quad in general change with camera
+	//     movement. We don't want to re-tessallate the quad everytime the view changes (that would be very costly
+	//     on the CPU), so the only other choice is to get it up to the correct size in the vertex shader.
+	// --> Thus, we incorporate scaling in the "model transform" part of the modelview matrix. As basis for
+	//     scaling, we use the y-extent (y_ext) of the viewing frustum at the z_far plane and apply it to the quad
+	//     which is always tessellated into a "height" of exactly 1 unit, i.e. final quad height is 1*y_ext;
+	//
+	// To deal with that, we could either apply the inverse scaling factor (1/y_ext) to the height, or we can
+	// apply the offset _after_ the modelview transformation. In this shader, we do the latter (it is unclear
+	// though which is actually better).
+
+	// The cheapest way to extract the actual height from the depth map is to interpret depth [0..1] as a linear
+	// interpolation coefficient between [znear...zfar]. This way we don't even need any matrix multiplication at
+	// all (and we can pre-calculate the inverse projection on the CPU and pass it as uniform). The formula to get
+	// the near/far clipping planes from a projection matrix are as follows:
+	//
+	// P...projection matrix ,   P^-1...inverse projection matrix ,   (P^-1)_ij...element of P^-1 at i-th col,
+	//                                                                            j-th row
+	//           -(P^-1)_22 + (P^-1)_32
+	// z_near =  ───────────────────────
+	//  |        -(P^-1)_23 + (P^-1)_33
+	//  |
+	//  └──> follows from the fact that    P^-1 * (0,0,-1,1)^T    is a point on the near clipping plane in eye space
+	//
+	//
+	//            (P^-1)_22 + (P^-1)_32
+	// z_far  =  ───────────────────────
+	//  |         (P^-1)_23 + (P^-1)_33
+	//  |
+	//  └──> follows from the fact that    P^-1 * (0,0,1,1)^T     is a point on the far clipping plane in eye space
+	//
+	// Furthermore, the denominators -(P^-1)_23 + (P^-1)_33 and (P^-1)_23 + (P^-1)_33 always evaluate to 1 for
+	// orthogonal projections and can thus be dropped from the calculation.
+
+	/*
+	const float znear_w = 1, // for non-orthogonal projections: -unproject[2][3] + unproject[3][3]
+	             zfar_w = 1; // for non-orthogonal projections:  unproject[2][3] + unproject[3][3]
+	*/
+	float z_near  = -inv_proj_source[2][2] + inv_proj_source[3][2], // divide by znear_w for non-orthogonal projections
+	      z_far   =  inv_proj_source[2][2] + inv_proj_source[3][2]; // divide by  zfar_w for non-orthogonal projections
+
+	float z_coord = (1-depth)*(z_near-z_far);
+	vec4 z_dir = vec4(normalize(get_normal_matrix()*vec3(0, 0, 1)),  0);
+
+	vec4 pos_target = get_modelview_matrix() * position; 
+	pos_target -= z_dir * z_coord;             
 	
-	//gl_Position = position;
+	gl_Position = get_projection_matrix() * pos_target;
 }
