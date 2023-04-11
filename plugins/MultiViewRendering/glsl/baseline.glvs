@@ -15,6 +15,8 @@ uniform sampler2D depth;
 
 uniform mat4 inv_proj_source;
 uniform mat4 original_modelview;
+uniform mat4 proj_target;
+uniform mat4 modelview_target;
 
 in vec4 position;
 in vec2 texcoord;
@@ -73,18 +75,19 @@ void main()
 	// Furthermore, the denominators -(P^-1)_23 + (P^-1)_33 and (P^-1)_23 + (P^-1)_33 always evaluate to 1 for
 	// orthogonal projections and can thus be dropped from the calculation.
 
-	/*
-	const float znear_w = 1, // for non-orthogonal projections: -unproject[2][3] + unproject[3][3]
-	             zfar_w = 1; // for non-orthogonal projections:  unproject[2][3] + unproject[3][3]
-	*/
-	float z_near  = -inv_proj_source[2][2] + inv_proj_source[3][2], // divide by znear_w for non-orthogonal projections
-	      z_far   =  inv_proj_source[2][2] + inv_proj_source[3][2]; // divide by  zfar_w for non-orthogonal projections
-
-	float z_coord = (1-depth)*(z_near-z_far);
-	vec4 z_dir = vec4(normalize(get_normal_matrix()*vec3(0, 0, 1)),  0);
-
-	vec4 pos_target = get_modelview_matrix() * position; 
-	pos_target -= z_dir * z_coord;             
 	
-	gl_Position = get_projection_matrix() * pos_target;
+	//float znear_w = -inv_proj_source[2][3] + inv_proj_source[3][3],
+	//      zfar_w = inv_proj_source[2][3] + inv_proj_source[3][3];
+	
+	//float z_near  = (-inv_proj_source[2][2] + inv_proj_source[3][2])/znear_w, // divide by znear_w for non-orthogonal projections
+	//      z_far   = (inv_proj_source[2][2] + inv_proj_source[3][2])/zfar_w; // divide by  zfar_w for non-orthogonal projections
+
+	//float z_coord = (1-depth)*(z_near-z_far);
+	//vec4 z_dir = vec4(normalize(get_normal_matrix()*vec3(0, 0, 1)),  0);
+
+	//vec4 pos_target = get_modelview_matrix() * position; 
+	vec4 pos_target = get_modelview_matrix() * inverse(original_modelview)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
+	//pos_target -= z_dir * z_coord;             
+	
+	gl_Position = get_projection_matrix() * pos_target + 0.0000001 * position;
 }

@@ -2,6 +2,8 @@
 
 uniform bool prune_empty;
 
+uniform bool with_interpolated_holes;
+
 in vec4 color_fs;
 in float discard_fs;
 
@@ -10,7 +12,7 @@ out vec4 color;
 
 void main()
 {
-	if (prune_empty && discard_fs > 0)
+	if (prune_empty && ((discard_fs > 0 && !with_interpolated_holes) || (discard_fs == 1 && with_interpolated_holes)))
 		discard; // don't render "empty" geometry
 	color = color_fs;
 }
