@@ -138,6 +138,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		// our base projection matrix
 		mat4 mat_proj_render[3];
+		mat4 proj_for_render;
 
 		// image warping test shaders
 		shader_program baseline_shader; // the mesh-based baseline approach
@@ -156,7 +157,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		// transformation matrix for positioning the heightmap at the plane behind the scene from
 		// which it was shot
 		mat4 heightmap_trans;
-		mat4 original_modelview;
+		mat4 modelview_source;
 
 		// whether to render the heightmap
 		bool render_heightmap = false;
@@ -503,7 +504,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
 		//          initial mono depth map test case)
 
-		if (test.shoot_heightmap || (test.nr_rendered_views_changed && test.render_heightmap)) {
+		if (test.shoot_heightmap) {
 			static const vec3 right_local(1, 0, 0);
 			const mat4 invMV = inv(ctx.get_modelview_matrix());
 			const vec3 cam_pos = view->get_eye(), cam_dir = view->get_view_dir(),
@@ -520,21 +521,16 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) * Scale(y_ext)
 			test.heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
 										 vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});
-
+			test.modelview_source = ctx.get_modelview_matrix() * test.heightmap_trans;
 			
 			x_ext_half = 0.5f * x_ext;
 			const float y_ext_half = 0.5f * y_ext, znear = bmin - cam_depth_world;
 
-			//z_zero = -view->get_scene_extent().get_extent()[2];
 			z_zero = cam_depth_world;
-
-			test.original_modelview = ctx.get_modelview_matrix() * test.heightmap_trans;
 
 			// change projection matrix to orthogonal according to the current (view-dependent) extends of our
 			// heightmap
-
-			test.mat_proj_render[0] = test.mat_proj_render[1] = test.mat_proj_render[2] = 
-				  ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye);
+			test.proj_for_render = ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye);
 		}
 
 		for (int i = 0; i < test.nr_renders; i++) {
@@ -556,8 +552,10 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				translate(0, 3) = (-1) * test.render_offset[i] * x_ext_half;
 
 				ctx.push_projection_matrix();
-				test.mat_proj_render[i] = test.mat_proj_render[i] * shear * translate;
+				test.mat_proj_render[i] = test.proj_for_render * shear * translate;
 				ctx.set_projection_matrix(test.mat_proj_render[i]);
+				ctx.push_modelview_matrix();
+				ctx.set_modelview_matrix(test.modelview_source * inv(test.heightmap_trans));
 			}
 
 
@@ -601,11 +599,11 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 			// we only position the heightmap in space when it's being "shot", it will remain there afterwards
 			// so it can be inspected from all sides and compared to the "real" scene
-			if (test.shoot_heightmap || test.nr_rendered_views_changed) {
+			if (test.shoot_heightmap || (test.nr_rendered_views_changed && test.render_heightmap)) {
 				// disable the offscreen framebuffer and reset projection matrix
 				test.render_fbo[i].disable(ctx);
 				ctx.pop_projection_matrix();
-				//ctx.pop_modelview_matrix();
+				ctx.pop_modelview_matrix();
 
 				// shoot complete
 				if (i == test.nr_renders-1) {
@@ -660,7 +658,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				test.baseline_shader.set_uniform(ctx, "depth", 1);
 
 				test.baseline_shader.set_uniform(ctx, "inv_proj_source", inv(test.mat_proj_render[i]));
-				test.baseline_shader.set_uniform(ctx, "original_modelview", test.original_modelview);
+				test.baseline_shader.set_uniform(ctx, "modelview_source", test.modelview_source);
 				test.baseline_shader.set_uniform(ctx, "prune_empty", test.prune_heightmap);
 				test.baseline_shader.set_uniform(ctx, "with_interpolated_holes",
 												 test.with_interpolated_holes && test.render_offset[i] == 0.0f);

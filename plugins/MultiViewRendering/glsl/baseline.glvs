@@ -14,7 +14,7 @@ uniform sampler2D color;
 uniform sampler2D depth;
 
 uniform mat4 inv_proj_source;
-uniform mat4 original_modelview;
+uniform mat4 modelview_source;
 uniform mat4 proj_target;
 uniform mat4 modelview_target;
 
@@ -32,7 +32,6 @@ void main()
 
 	float depth = textureLod(depth, texcoord, 0).r;
 	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
-
 
 	// Our modelview matrix that transforms the heightmap into the eye space of the target view has some scaling
 	// in it. The reason for that can be explained as follows:
@@ -86,7 +85,7 @@ void main()
 	//vec4 z_dir = vec4(normalize(get_normal_matrix()*vec3(0, 0, 1)),  0);
 
 	//vec4 pos_target = get_modelview_matrix() * position; 
-	vec4 pos_target = get_modelview_matrix() * inverse(original_modelview)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
+	vec4 pos_target = get_modelview_matrix() * inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
 	//pos_target -= z_dir * z_coord;             
 	
 	gl_Position = get_projection_matrix() * pos_target + 0.0000001 * position;
