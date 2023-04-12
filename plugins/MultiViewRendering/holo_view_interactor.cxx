@@ -18,7 +18,6 @@
 #include <cgv/type/variant.h>
 #include <cmath>
 #include <stdio.h>
-#include <chrono>
 
 using namespace cgv::math;
 using namespace cgv::signal;
@@ -30,7 +29,8 @@ using namespace cgv::render::gl;
 #define SMP_ENUMS "bitmap,pixels,arrow"
 #define HOLO_ENUMS "single,quilt,volume"
 
-cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode> get_reflection_traits(const holo_view_interactor::MultiplexMode&)
+cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode>
+get_reflection_traits(const holo_view_interactor::MultiplexMode&)
 {
 	return cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode>("single,quilt,volume");
 }
@@ -123,7 +123,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 		check_emulation_active();
 	}
 	else {
-		if (!(left_stick.length() > deadzone || right_stick.length() > deadzone || fabs(trigger[1] - trigger[0]) > deadzone))
+		if (!(left_stick.length() > deadzone || right_stick.length() > deadzone ||
+			  fabs(trigger[1] - trigger[0]) > deadzone))
 			return;
 	}
 	dvec3 x, y, z;
@@ -133,7 +134,7 @@ void holo_view_interactor::timer_event(double t, double dt)
 		switch (left_mode) {
 		case 0:
 			rotate(4 * mode_sign * dt / rotate_sensitivity * left_stick[1],
-				-4 * dt / rotate_sensitivity * left_stick[0], right_mode == 1 ? 0.0 : get_depth_of_focus());
+				   -4 * dt / rotate_sensitivity * left_stick[0], right_mode == 1 ? 0.0 : get_depth_of_focus());
 			on_rotation_change();
 			break;
 		case 1:
@@ -176,7 +177,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 }
 
 ///
-holo_view_interactor::holo_view_interactor(const char* name) : node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]")
+holo_view_interactor::holo_view_interactor(const char* name)
+	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -213,18 +215,15 @@ holo_view_interactor::holo_view_interactor(const char* name) : node(name), quilt
 	quilt_render_tex.set_mag_filter(cgv::render::TF_LINEAR);
 	volume_render_tex.set_mag_filter(cgv::render::TF_LINEAR);
 }
-/// return the type name 
-std::string holo_view_interactor::get_type_name() const
-{
-	return "holo_view_interactor";
-}
+/// return the type name
+std::string holo_view_interactor::get_type_name() const { return "holo_view_interactor"; }
 
 /// overload to stream help information to the given output stream
 void holo_view_interactor::stream_help(std::ostream& os)
 {
 	os << "holo_view_interactor:\n\a"
-		<< "stereo[F4], stereo mode[s-F4], z_near<c-N,a-N>, z_far<c-F,a-F>, select view dir{c-X|Y|Z,sc-X|Y|Z}\n"
-		<< "view all{c-Spc}, show focus[s-F], set focus{click LMB}, pan<RMB>, zoom<MMB>, rotate<LMB>, roll<s-LMB>";
+	   << "stereo[F4], stereo mode[s-F4], z_near<c-N,a-N>, z_far<c-F,a-F>, select view dir{c-X|Y|Z,sc-X|Y|Z}\n"
+	   << "view all{c-Spc}, show focus[s-F], set focus{click LMB}, pan<RMB>, zoom<MMB>, rotate<LMB>, roll<s-LMB>";
 	if (fix_view_up_dir)
 		os << " disabled";
 	os << "\n";
@@ -240,8 +239,8 @@ void holo_view_interactor::stream_stats(std::ostream& os)
 {
 	os << "holo_view_interactor:\n\a";
 
-	oprintf(os, "y_view_angle=%.1f�, y_extent=%.1f, inp_z_range:[%.2f,%.2f]",
-		y_view_angle, y_extent_at_focus, z_near, z_far);
+	oprintf(os, "y_view_angle=%.1f�, y_extent=%.1f, inp_z_range:[%.2f,%.2f]", y_view_angle, y_extent_at_focus, z_near,
+			z_far);
 	if (scene_extent.is_valid()) {
 		oprintf(os, " adapted to scene: [%.2f,%.2f]\n", z_near_derived, z_far_derived);
 		os << "current scene extent: " << scene_extent << std::endl;
@@ -251,14 +250,13 @@ void holo_view_interactor::stream_stats(std::ostream& os)
 	else
 		os << "\n";
 
-	oprintf(os, "foc=%.2f,%.2f,%.2f, dir=%.2f,%.2f,%.2f, up=%.2f,%.2f,%.2f\n",
-		view::focus(0), view::focus(1), view::focus(2),
-		view_dir(0), view_dir(1), view_dir(2),
-		view_up_dir(0), view_up_dir(1), view_up_dir(2));
+	oprintf(os, "foc=%.2f,%.2f,%.2f, dir=%.2f,%.2f,%.2f, up=%.2f,%.2f,%.2f\n", view::focus(0), view::focus(1),
+			view::focus(2), view_dir(0), view_dir(1), view_dir(2), view_up_dir(0), view_up_dir(1), view_up_dir(2));
 
 	oprintf(os, "render mpx:%s, eye-dist=%.3f", find_enum_name(HOLO_ENUMS, render_mpx_mode).c_str(), eye_distance);
 	if (gamepad_attached) {
-		oprintf(os, "\nleft:%s, right:%s", (left_mode == 0 ? "rotate" : "pan"), (right_mode == 0 ? "roll|zoom" : "move|dolly"));
+		oprintf(os, "\nleft:%s, right:%s", (left_mode == 0 ? "rotate" : "pan"),
+				(right_mode == 0 ? "roll|zoom" : "move|dolly"));
 	}
 	if (emulation_active) {
 		os << "\nEMU:";
@@ -280,7 +278,8 @@ unsigned holo_view_interactor::get_viewport_index(unsigned col_index, unsigned r
 	return view_index;
 }
 
-/// call this function before a drawing process to support viewport splitting inside the draw call via the activate/deactivate functions
+/// call this function before a drawing process to support viewport splitting inside the draw call via the
+/// activate/deactivate functions
 void holo_view_interactor::enable_viewport_splitting(unsigned nr_cols, unsigned nr_rows)
 {
 	do_viewport_splitting = true;
@@ -290,23 +289,21 @@ void holo_view_interactor::enable_viewport_splitting(unsigned nr_cols, unsigned 
 	post_redraw();
 }
 
-/// check whether viewport splitting is activated and optionally set the number of columns and rows if corresponding pointers are passed
+/// check whether viewport splitting is activated and optionally set the number of columns and rows if corresponding
+/// pointers are passed
 bool holo_view_interactor::is_viewport_splitting_enabled(unsigned* nr_cols_ptr, unsigned* nr_rows_ptr) const
 {
 	if (do_viewport_splitting) {
 		if (nr_cols_ptr)
-			* nr_cols_ptr = nr_viewport_columns;
+			*nr_cols_ptr = nr_viewport_columns;
 		if (nr_rows_ptr)
-			* nr_rows_ptr = nr_viewport_rows;
+			*nr_rows_ptr = nr_viewport_rows;
 	}
 	return do_viewport_splitting;
 }
 
 /// disable viewport splitting
-void holo_view_interactor::disable_viewport_splitting()
-{
-	do_viewport_splitting = false;
-}
+void holo_view_interactor::disable_viewport_splitting() { do_viewport_splitting = false; }
 
 holo_view_interactor::ivec4 holo_view_interactor::split_viewport(const ivec4 vp, int col_idx, int row_idx) const
 {
@@ -324,7 +321,8 @@ holo_view_interactor::ivec4 holo_view_interactor::split_viewport(const ivec4 vp,
 	return new_vp;
 }
 
-/// inside the drawing process activate the sub-viewport with the given column and row indices, always terminate an activated viewport with deactivate_split_viewport
+/// inside the drawing process activate the sub-viewport with the given column and row indices, always terminate an
+/// activated viewport with deactivate_split_viewport
 void holo_view_interactor::activate_split_viewport(cgv::render::context& ctx, unsigned col_index, unsigned row_index)
 {
 	if (!do_viewport_splitting)
@@ -375,13 +373,10 @@ cgv::render::view& holo_view_interactor::ref_viewport_view(unsigned col_index, u
 }
 
 //! given a mouse location and the pixel extent of the context, return the MPW matrix for unprojection
-int holo_view_interactor::get_modelview_projection_window_matrices(int x, int y, int width, int height,
-	const dmat4** MPW_pptr,
-	const dmat4** MPW_other_pptr, int* x_other_ptr, int* y_other_ptr,
-	int* vp_col_idx_ptr, int* vp_row_idx_ptr,
-	int* vp_width_ptr, int* vp_height_ptr,
-	int* vp_center_x_ptr, int* vp_center_y_ptr,
-	int* vp_center_x_other_ptr, int* vp_center_y_other_ptr) const
+int holo_view_interactor::get_modelview_projection_window_matrices(
+	  int x, int y, int width, int height, const dmat4** MPW_pptr, const dmat4** MPW_other_pptr, int* x_other_ptr,
+	  int* y_other_ptr, int* vp_col_idx_ptr, int* vp_row_idx_ptr, int* vp_width_ptr, int* vp_height_ptr,
+	  int* vp_center_x_ptr, int* vp_center_y_ptr, int* vp_center_x_other_ptr, int* vp_center_y_other_ptr) const
 {
 	*MPW_pptr = &MPW;
 	const dmat4* MPW_other_ptr_local = &MPW;
@@ -408,62 +403,67 @@ int holo_view_interactor::get_modelview_projection_window_matrices(int x, int y,
 		int vp_idx = vp_row_idx * last_nr_viewport_columns + vp_col_idx;
 		if (eye_panel == 1) {
 			if (vp_idx < (int)MPWs_right.size())
-				* MPW_pptr = &MPWs_right[vp_idx];
+				*MPW_pptr = &MPWs_right[vp_idx];
 			if (vp_idx < (int)MPWs.size())
 				MPW_other_ptr_local = &MPWs[vp_idx];
 		}
 		else {
 			if (vp_idx < (int)MPWs.size())
-				* MPW_pptr = &MPWs[vp_idx];
-//			if (stereo_enabled) {
-//				if (vp_idx < (int)MPWs_right.size())
-//					MPW_other_ptr_local = &MPWs_right[vp_idx];
-//			}
-//			else {
-				if (vp_idx < (int)MPWs.size())
-					MPW_other_ptr_local = &MPWs[vp_idx];
-//			}
+				*MPW_pptr = &MPWs[vp_idx];
+			//			if (stereo_enabled) {
+			//				if (vp_idx < (int)MPWs_right.size())
+			//					MPW_other_ptr_local = &MPWs_right[vp_idx];
+			//			}
+			//			else {
+			if (vp_idx < (int)MPWs.size())
+				MPW_other_ptr_local = &MPWs[vp_idx];
+			//			}
 		}
 	}
 
 	if (MPW_other_pptr)
-		* MPW_other_pptr = MPW_other_ptr_local;
+		*MPW_other_pptr = MPW_other_ptr_local;
 	if (x_other_ptr)
-		* x_other_ptr = x_other;
+		*x_other_ptr = x_other;
 	if (y_other_ptr)
-		* y_other_ptr = y_other;
+		*y_other_ptr = y_other;
 	if (vp_col_idx_ptr)
-		* vp_col_idx_ptr = vp_col_idx;
+		*vp_col_idx_ptr = vp_col_idx;
 	if (vp_row_idx_ptr)
-		* vp_row_idx_ptr = vp_row_idx;
+		*vp_row_idx_ptr = vp_row_idx;
 	if (vp_width_ptr)
-		* vp_width_ptr = vp_width;
+		*vp_width_ptr = vp_width;
 	if (vp_height_ptr)
-		* vp_height_ptr = vp_height;
+		*vp_height_ptr = vp_height;
 	if (vp_center_x_ptr)
-		* vp_center_x_ptr = off_x + vp_width / 2;
+		*vp_center_x_ptr = off_x + vp_width / 2;
 	if (vp_center_y_ptr)
-		* vp_center_y_ptr = off_y + vp_height / 2;
+		*vp_center_y_ptr = off_y + vp_height / 2;
 	if (vp_center_x_other_ptr)
-		* vp_center_x_other_ptr = off_x_other + vp_width / 2;
+		*vp_center_x_other_ptr = off_x_other + vp_width / 2;
 	if (vp_center_y_other_ptr)
-		* vp_center_y_other_ptr = off_y_other + vp_height / 2;
+		*vp_center_y_other_ptr = off_y_other + vp_height / 2;
 
 	return eye_panel;
 }
 
-void holo_view_interactor::get_vp_col_and_row_indices(cgv::render::context& ctx, int x, int y, int& vp_col_idx, int& vp_row_idx)
+void holo_view_interactor::get_vp_col_and_row_indices(cgv::render::context& ctx, int x, int y, int& vp_col_idx,
+													  int& vp_row_idx)
 {
-	const dmat4* MPW_ptr, * MPW_other_ptr;
+	const dmat4 *MPW_ptr, *MPW_other_ptr;
 	int x_other, y_other, vp_width, vp_height;
-	int eye_panel = get_modelview_projection_window_matrices(x, y, ctx.get_width(), ctx.get_height(), &MPW_ptr, &MPW_other_ptr, &x_other, &y_other, &vp_col_idx, &vp_row_idx, &vp_width, &vp_height);
+	int eye_panel =
+		  get_modelview_projection_window_matrices(x, y, ctx.get_width(), ctx.get_height(), &MPW_ptr, &MPW_other_ptr,
+												   &x_other, &y_other, &vp_col_idx, &vp_row_idx, &vp_width, &vp_height);
 }
 
 double holo_view_interactor::get_z_and_unproject(cgv::render::context& ctx, int x, int y, dvec3& p)
 {
-	const dmat4* MPW_ptr, * MPW_other_ptr;
+	const dmat4 *MPW_ptr, *MPW_other_ptr;
 	int x_other, y_other, vp_col_idx, vp_row_idx, vp_width, vp_height;
-	int eye_panel = get_modelview_projection_window_matrices(x, y, ctx.get_width(), ctx.get_height(), &MPW_ptr, &MPW_other_ptr, &x_other, &y_other, &vp_col_idx, &vp_row_idx, &vp_width, &vp_height);
+	int eye_panel =
+		  get_modelview_projection_window_matrices(x, y, ctx.get_width(), ctx.get_height(), &MPW_ptr, &MPW_other_ptr,
+												   &x_other, &y_other, &vp_col_idx, &vp_row_idx, &vp_width, &vp_height);
 	ctx.make_current();
 	double z = ctx.get_window_z(x, y);
 	double z_other = ctx.get_window_z(x_other, y_other);
@@ -481,12 +481,18 @@ double holo_view_interactor::get_z_and_unproject(cgv::render::context& ctx, int 
 cgv::render::view::dvec3 unpack_dir(char c)
 {
 	switch (c) {
-	case 'x': return cgv::render::view::dvec3(1, 0, 0);
-	case 'X': return cgv::render::view::dvec3(-1, 0, 0);
-	case 'y': return cgv::render::view::dvec3(0, 1, 0);
-	case 'Y': return cgv::render::view::dvec3(0, -1, 0);
-	case 'z': return cgv::render::view::dvec3(0, 0, 1);
-	case 'Z': return cgv::render::view::dvec3(0, 0, -1);
+	case 'x':
+		return cgv::render::view::dvec3(1, 0, 0);
+	case 'X':
+		return cgv::render::view::dvec3(-1, 0, 0);
+	case 'y':
+		return cgv::render::view::dvec3(0, 1, 0);
+	case 'Y':
+		return cgv::render::view::dvec3(0, -1, 0);
+	case 'z':
+		return cgv::render::view::dvec3(0, 0, 1);
+	case 'Z':
+		return cgv::render::view::dvec3(0, 0, -1);
 	}
 	return cgv::render::view::dvec3(0, 0, 0);
 }
@@ -608,7 +614,8 @@ bool holo_view_interactor::handle(event& e)
 			case KEY_Num_Add:
 			case KEY_Page_Up:
 				if ((ke.get_key() == KEY_Page_Up && ke.get_modifiers() == 0) ||
-					(ke.get_key() == KEY_Num_Add && ke.get_modifiers() == EM_CTRL)) {
+					(ke.get_key() == KEY_Num_Add && ke.get_modifiers() == EM_CTRL))
+				{
 					y_extent_at_focus /= pow(1.2, 1 / zoom_sensitivity);
 					on_set(&y_extent_at_focus);
 					return true;
@@ -617,7 +624,8 @@ bool holo_view_interactor::handle(event& e)
 			case KEY_Num_Sub:
 			case KEY_Page_Down:
 				if ((ke.get_key() == KEY_Page_Down && ke.get_modifiers() == 0) ||
-					(ke.get_key() == KEY_Num_Sub && ke.get_modifiers() == EM_CTRL)) {
+					(ke.get_key() == KEY_Num_Sub && ke.get_modifiers() == EM_CTRL))
+				{
 					y_extent_at_focus *= pow(1.2, 1 / zoom_sensitivity);
 					on_set(&y_extent_at_focus);
 					return true;
@@ -656,7 +664,7 @@ bool holo_view_interactor::handle(event& e)
 				}
 				break;
 			case 'Q':
-				if (ke.get_modifiers() == cgv::gui::EM_SHIFT+cgv::gui::EM_CTRL) {
+				if (ke.get_modifiers() == cgv::gui::EM_SHIFT + cgv::gui::EM_CTRL) {
 					render_mpx_mode = HM_QUILT;
 					on_set(&render_mpx_mode);
 					return true;
@@ -694,7 +702,6 @@ bool holo_view_interactor::handle(event& e)
 					break;
 				return true;
 			}
-
 		}
 	}
 	else if (e.get_kind() == EID_MOUSE) {
@@ -713,9 +720,9 @@ bool holo_view_interactor::handle(event& e)
 		cgv::render::view* view_ptr = this;
 		const dmat4* MPW_ptr = 0;
 		if (get_context()) {
-			int eye = get_modelview_projection_window_matrices(x_gl, y_gl,
-				get_context()->get_width(), get_context()->get_height(),
-				&MPW_ptr, 0, 0, 0, &vp_col_idx, &vp_row_idx, &width, &height, &center_x, &center_y);
+			int eye = get_modelview_projection_window_matrices(
+				  x_gl, y_gl, get_context()->get_width(), get_context()->get_height(), &MPW_ptr, 0, 0, 0, &vp_col_idx,
+				  &vp_row_idx, &width, &height, &center_x, &center_y);
 			unsigned view_index = get_viewport_index(vp_col_idx, vp_row_idx);
 			if (view_index != -1 && use_individual_view[view_index]) {
 				view_ptr = &views[view_index];
@@ -731,7 +738,7 @@ bool holo_view_interactor::handle(event& e)
 				return true;
 			}
 			if (((me.get_button() == MB_LEFT_BUTTON) &&
-				((me.get_modifiers() == 0) || (me.get_modifiers() == EM_SHIFT))) ||
+				 ((me.get_modifiers() == 0) || (me.get_modifiers() == EM_SHIFT))) ||
 				((me.get_button() == MB_RIGHT_BUTTON) && (me.get_modifiers() == 0)) ||
 				((me.get_button() == MB_MIDDLE_BUTTON) && (me.get_modifiers() == 0)))
 				return true;
@@ -749,10 +756,15 @@ bool holo_view_interactor::handle(event& e)
 								dvec3 e = view_ptr->get_eye();
 								double l_old = (e - view_ptr->get_focus()).length();
 								double l_new = dot(p - e, view_ptr->get_view_dir());
-								//std::cout << "e=(" << e << "), p=(" << p << "), vd=(" << view_ptr->get_view_dir() << ") l_old=" << l_old << ", l_new=" << l_new << std::endl;
-								cgv::gui::animate_with_geometric_blend(view_ptr->ref_y_extent_at_focus(), view_ptr->get_y_extent_at_focus() * l_new / l_old, 0.5)->set_base_ptr(this);
+								// std::cout << "e=(" << e << "), p=(" << p << "), vd=(" << view_ptr->get_view_dir() <<
+								// ") l_old=" << l_old << ", l_new=" << l_new << std::endl;
+								cgv::gui::animate_with_geometric_blend(
+									  view_ptr->ref_y_extent_at_focus(),
+									  view_ptr->get_y_extent_at_focus() * l_new / l_old, 0.5)
+									  ->set_base_ptr(this);
 							}
-							cgv::gui::animate_with_linear_blend(view_ptr->ref_focus(), p, 0.5)->configure(cgv::gui::APM_SIN_SQUARED, this);
+							cgv::gui::animate_with_linear_blend(view_ptr->ref_focus(), p, 0.5)
+								  ->configure(cgv::gui::APM_SIN_SQUARED, this);
 
 							update_vec_member(view::focus);
 							post_redraw();
@@ -773,9 +785,9 @@ bool holo_view_interactor::handle(event& e)
 			if (me.get_dx() == 0 && me.get_dy() == 0)
 				break;
 			if (me.get_button_state() == MB_LEFT_BUTTON && me.get_modifiers() == 0) {
-				if (!two_d_enabled)
-				{
-					view_ptr->rotate(-6.0 * me.get_dy() / height / rotate_sensitivity, -6.0 * me.get_dx() / width / rotate_sensitivity, view_ptr->get_depth_of_focus());
+				if (!two_d_enabled) {
+					view_ptr->rotate(-6.0 * me.get_dy() / height / rotate_sensitivity,
+									 -6.0 * me.get_dx() / width / rotate_sensitivity, view_ptr->get_depth_of_focus());
 					update_vec_member(view_up_dir);
 					update_vec_member(view_dir);
 					post_redraw();
@@ -785,8 +797,9 @@ bool holo_view_interactor::handle(event& e)
 			if (me.get_button_state() == MB_LEFT_BUTTON && me.get_modifiers() == EM_SHIFT) {
 				int rx = me.get_x() - center_x;
 				int ry = me.get_y() - center_y;
-				double ds = sqrt(((double)me.get_dx() * (double)me.get_dx() + (double)me.get_dy() * (double)me.get_dy()) /
-					((double)rx * (double)rx + (double)ry * (double)ry));
+				double ds =
+					  sqrt(((double)me.get_dx() * (double)me.get_dx() + (double)me.get_dy() * (double)me.get_dy()) /
+						   ((double)rx * (double)rx + (double)ry * (double)ry));
 				if (rx * me.get_dy() > ry * me.get_dx())
 					ds = -ds;
 				view_ptr->roll(ds / rotate_sensitivity);
@@ -795,15 +808,16 @@ bool holo_view_interactor::handle(event& e)
 				return true;
 			}
 			if (me.get_button_state() == MB_RIGHT_BUTTON && me.get_modifiers() == 0) {
-				view_ptr->set_focus(view_ptr->get_focus() - (view_ptr->get_y_extent_at_focus() * me.get_dx() / width) * x
-					+ (view_ptr->get_y_extent_at_focus() * me.get_dy() / height) * y);
+				view_ptr->set_focus(view_ptr->get_focus() -
+									(view_ptr->get_y_extent_at_focus() * me.get_dx() / width) * x +
+									(view_ptr->get_y_extent_at_focus() * me.get_dy() / height) * y);
 				update_vec_member(view::focus);
 				post_redraw();
 				return true;
 			}
 			if (me.get_button_state() == MB_MIDDLE_BUTTON && me.get_modifiers() == 0) {
-				view_ptr->set_focus(view_ptr->get_focus() -
-					5 * view_ptr->get_y_extent_at_focus() * me.get_dy() / height * z / zoom_sensitivity);
+				view_ptr->set_focus(view_ptr->get_focus() - 5 * view_ptr->get_y_extent_at_focus() * me.get_dy() /
+																  height * z / zoom_sensitivity);
 				update_vec_member(view::focus);
 				post_redraw();
 				return true;
@@ -846,7 +860,8 @@ bool holo_view_interactor::handle(event& e)
 				return true;
 			}
 			break;
-		default: break;
+		default:
+			break;
 		}
 	}
 	return false;
@@ -903,21 +918,28 @@ void holo_view_interactor::gl_set_projection_matrix(cgv::render::context& ctx, f
 {
 	dmat4 P;
 	if (y_view_angle <= 0.1)
-		P = ortho4<double>(-aspect * y_extent_at_focus, aspect * y_extent_at_focus, -y_extent_at_focus, y_extent_at_focus, z_near_derived, z_far_derived);
+		P = ortho4<double>(-aspect * y_extent_at_focus, aspect * y_extent_at_focus, -y_extent_at_focus,
+						   y_extent_at_focus, z_near_derived, z_far_derived);
 	else {
 		if (stereo_translate_in_model_view)
-			P = cgv::math::stereo_frustum_screen4<double>(e, eye_distance, y_extent_at_focus * aspect, y_extent_at_focus, get_parallax_zero_depth(), z_near_derived, z_far_derived);
+			P = cgv::math::stereo_frustum_screen4<double>(e, eye_distance, y_extent_at_focus * aspect,
+														  y_extent_at_focus, get_parallax_zero_depth(), z_near_derived,
+														  z_far_derived);
 		else
-			P = cgv::math::stereo_perspective_screen4<double>(e, eye_distance, y_extent_at_focus * aspect, y_extent_at_focus, get_parallax_zero_depth(), z_near_derived, z_far_derived);
+			P = cgv::math::stereo_perspective_screen4<double>(e, eye_distance, y_extent_at_focus * aspect,
+															  y_extent_at_focus, get_parallax_zero_depth(),
+															  z_near_derived, z_far_derived);
 	}
 	ctx.set_projection_matrix(P);
 }
 
-void holo_view_interactor::gl_set_modelview_matrix(cgv::render::context& ctx, float e, double aspect, const cgv::render::view& view)
+void holo_view_interactor::gl_set_modelview_matrix(cgv::render::context& ctx, float e, double aspect,
+												   const cgv::render::view& view)
 {
 	ctx.set_modelview_matrix(cgv::math::identity4<double>());
 	if (stereo_translate_in_model_view)
-		ctx.mul_modelview_matrix(cgv::math::stereo_translate_screen4<double>(e, eye_distance, view.get_y_extent_at_focus() * aspect));
+		ctx.mul_modelview_matrix(
+			  cgv::math::stereo_translate_screen4<double>(e, eye_distance, view.get_y_extent_at_focus() * aspect));
 	ctx.mul_modelview_matrix(cgv::math::look_at4(view.get_eye(), view.get_focus(), view.get_view_up_dir()));
 }
 
@@ -941,8 +963,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!volume_prog.build_program(ctx, "volume_finish.glpr", true))
 		return false;
-	if (!warp_prog.build_program(ctx, "warp.glpr", true))
-		return false;
 	return true;
 }
 
@@ -951,15 +971,15 @@ void holo_view_interactor::init_frame(context& ctx)
 {
 	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
 
-	// check mono rendering case 
+	// check mono rendering case
 	switch (render_mpx_mode) {
-	case HM_SINGLE :
-		current_e = (2.0f*view_index) / (nr_render_views-1) - 1.0f;
+	case HM_SINGLE:
+		current_e = (2.0f * view_index) / (nr_render_views - 1) - 1.0f;
 		last_do_viewport_splitting = do_viewport_splitting;
 		last_nr_viewport_columns = nr_viewport_columns;
 		last_nr_viewport_rows = nr_viewport_rows;
 		break;
-	case HM_QUILT :
+	case HM_QUILT:
 	case HM_VOLUME:
 		/////////////////////////////////////////////
 		/// --NOTE--
@@ -989,7 +1009,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		/// focus point is near the center of the scene and (b) the observer is far enough away such that the
 		/// scene fills the whole viewport, it will appear in 3D to be roughly the same physical real-world
 		/// size as the screen.
-		/// 
+		///
 		if (initiate_render_pass_recursion(ctx)) {
 			enable_surface(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
@@ -997,13 +1017,15 @@ void holo_view_interactor::init_frame(context& ctx)
 			last_nr_viewport_rows = nr_viewport_rows;
 			if (render_mpx_mode == HM_QUILT) {
 				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-				//view_width = ctx.get_width() / quilt_nr_cols;
-				//view_height = ctx.get_height() / quilt_nr_rows;
+				// view_width = ctx.get_width() / quilt_nr_cols;
+				// view_height = ctx.get_height() / quilt_nr_rows;
 				vi = 0;
 				for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 					for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
+
+						volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
 						perform_render_pass(ctx, vi, RP_STEREO);
 						if (++vi == nr_render_views)
 							break;
@@ -1019,10 +1041,10 @@ void holo_view_interactor::init_frame(context& ctx)
 					perform_render_pass(ctx, vi, RP_STEREO);
 				}
 			}
-			initiate_terminal_render_pass(nr_render_views-1);
+			initiate_terminal_render_pass(nr_render_views - 1);
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
-			current_e = (2.0f*vi) / (nr_render_views-1) - 1.0f;
+			current_e = (2.0f * vi) / (nr_render_views - 1) - 1.0f;
 			if (render_mpx_mode == HM_QUILT) {
 				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
 				glViewport(vp[0], vp[1], vp[2], vp[3]);
@@ -1067,45 +1089,37 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 		glDisable(GL_SCISSOR_TEST);
 		post_process_surface(ctx);
 	}
-	glViewport(0, 0, ctx.get_width(), ctx.get_height());
 }
 
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 {
-	time_start = std::chrono::high_resolution_clock::now();
-
 	if (render_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;
 		if (!quilt_fbo.is_created() || quilt_fbo.get_width() != quilt_width || quilt_fbo.get_height() != quilt_height) {
 			quilt_fbo.destruct(ctx);
 			quilt_render_tex.destruct(ctx);
-			quilt_depth_tex.destruct(ctx);
 			quilt_depth_buffer.destruct(ctx);
 			quilt_render_tex.create(ctx, TT_2D, quilt_width, quilt_height);
-			quilt_depth_tex.create(ctx, TT_2D, quilt_width, quilt_height);
 			quilt_depth_buffer.create(ctx, quilt_width, quilt_height);
 			quilt_fbo.create(ctx, quilt_width, quilt_height);
 			quilt_fbo.attach(ctx, quilt_render_tex, 0);
-			quilt_fbo.attach(ctx, quilt_depth_tex);
 			quilt_fbo.attach(ctx, quilt_depth_buffer);
 		}
 		quilt_fbo.enable(ctx, 0);
 		quilt_fbo.push_viewport(ctx);
 	}
 	else {
-		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width || volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_render_views ||
-		volume_depth_tex.get_depth() != nr_render_views){
+		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
+			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_render_views)
+		{
 			volume_fbo.destruct(ctx);
 			volume_render_tex.destruct(ctx);
-			volume_depth_tex.destruct(ctx);
 			volume_depth_buffer.destruct(ctx);
 			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
-			volume_depth_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
 			volume_depth_buffer.create(ctx, view_width, view_height);
 			volume_fbo.create(ctx, view_width, view_height);
 			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
-			volume_fbo.attach(ctx, volume_depth_tex);
 			volume_fbo.attach(ctx, volume_depth_buffer);
 		}
 		volume_fbo.enable(ctx, 0);
@@ -1128,140 +1142,27 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 		volume_fbo.pop_viewport(ctx);
 		volume_fbo.disable(ctx);
 	}
-	time_end = std::chrono::high_resolution_clock::now();
-	std::cout << std::fixed << "Rendering took "
-			  << std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_start).count()
-			  << " microseconds." << std::endl;
+	glViewport(0, 0, ctx.get_width(), ctx.get_height());
 }
 
 void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 {
 	/////////////////////////////////////////////
 	/// --NOTE--
-	/// Here is the place were the amount of rendered views (2 for the baseline approach) should be warped into all the other views
-	/// that the hologram needs (usually 9x5 = 45, stored in nr_holo_views which is right now still synchronized to nr_render_views).
-	/// For that, it will be necessary to differentiate between the textures the initial views are rendered into, and the "surface"
-	/// (in the sense that this method uses the term) where the lightfield views for the hologram are stored. The below code still
-	/// uses the texture containing the rendered views directly, but they will eventually contain much less views than the hologram
-	/// needs (probably just 2). After image warping, the results need to be written to another texture containing all views that
-	/// define the lightfield (called quilt_holo_tex or volume_holo_tex, depending on the multiplexing strategy selected for image
+	/// Here is the place were the amount of rendered views (2 for the baseline approach) should be warped into all the
+	/// other views that the hologram needs (usually 9x5 = 45, stored in nr_holo_views which is right now still
+	/// synchronized to nr_render_views). For that, it will be necessary to differentiate between the textures the
+	/// initial views are rendered into, and the "surface" (in the sense that this method uses the term) where the
+	/// lightfield views for the hologram are stored. The below code still uses the texture containing the rendered
+	/// views directly, but they will eventually contain much less views than the hologram needs (probably just 2).
+	/// After image warping, the results need to be written to another texture containing all views that define the
+	/// lightfield (called quilt_holo_tex or volume_holo_tex, depending on the multiplexing strategy selected for image
 	/// warping in the GUI), and this texture will be the input for the holo shader below.
 	///
-	cgv::render::shader_program& prog = warp_prog;
-	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
-
-	if (render_mpx_mode == HM_QUILT) {
-		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != display_calib.width ||
-			quilt_warp_fbo.get_height() != display_calib.height)
-		{
-			quilt_holo_tex.destruct(ctx);
-			quilt_warp_fbo.destruct(ctx);
-			quilt_warp_fbo.create(ctx, display_calib.width, display_calib.height);
-			quilt_holo_tex.create(ctx, cgv::render::TT_2D, display_calib.width, display_calib.height);
-			quilt_warp_fbo.attach(ctx, quilt_holo_tex);
-		}
-		quilt_warp_fbo.enable(ctx);
-		quilt_warp_fbo.push_viewport(ctx);
-
-		quilt_depth_tex.enable(ctx, 0);
-		prog.set_uniform(ctx, "depth_tex", 0);
-		quilt_render_tex.enable(ctx, 1);
-		prog.set_uniform(ctx, "colour_tex", 1);
-	}
-	else {
-		if (!volume_warp_fbo.is_created() || volume_warp_fbo.get_width() != display_calib.width ||
-			volume_warp_fbo.get_height() != display_calib.height)
-		{
-			volume_holo_tex.destruct(ctx);
-			volume_warp_fbo.destruct(ctx);
-			volume_warp_fbo.create(ctx, display_calib.width, display_calib.height);
-			volume_holo_tex.create(ctx, cgv::render::TT_2D, display_calib.width, display_calib.height);
-			volume_warp_fbo.attach(ctx, volume_holo_tex);
-		}
-		volume_warp_fbo.enable(ctx);
-		volume_warp_fbo.push_viewport(ctx);
-
-		volume_depth_tex.enable(ctx, 0);
-		prog.set_uniform(ctx, "depth_tex", 0);
-		volume_render_tex.enable(ctx, 1);
-		prog.set_uniform(ctx, "colour_tex", 1);
-	}
-	prog.set_uniform(ctx, "width", ctx.get_width());
-	prog.set_uniform(ctx, "height", ctx.get_height());
-	prog.set_uniform(ctx, "x_min", display_calib.x_min);
-	prog.set_uniform(ctx, "x_max", display_calib.x_max);
-	prog.set_uniform(ctx, "y_min", display_calib.y_min);
-	prog.set_uniform(ctx, "y_max", display_calib.y_max);
-
-	float aspect = ctx.get_width() / (float)ctx.get_height();
-	ctx.push_modelview_matrix();
-	ctx.push_projection_matrix();
-	gl_set_projection_matrix(ctx, -1, aspect);
-	gl_set_modelview_matrix(ctx, -1, aspect, *this);
-	auto MVl = ctx.get_modelview_matrix(), Pl = ctx.get_projection_matrix();
-	ctx.pop_modelview_matrix();
-	ctx.pop_projection_matrix();
-	prog.set_uniform(ctx, "mvp_right", MVl*Pl);
-
-	ctx.push_modelview_matrix();
-	ctx.push_projection_matrix();
-	gl_set_projection_matrix(ctx, 1, aspect);
-	gl_set_modelview_matrix(ctx, 1, aspect, *this);
-	auto MVr = ctx.get_modelview_matrix(), Pr = ctx.get_projection_matrix();
-	ctx.pop_modelview_matrix();
-	ctx.pop_projection_matrix();
-	prog.set_uniform(ctx, "mvp_left", MVr * Pr);
-	std::cout << ctx.get_modelview_matrix() * ctx.get_projection_matrix() << std::endl;
-
-		if (initiate_render_pass_recursion(ctx)) {
-		last_do_viewport_splitting = do_viewport_splitting;
-		last_nr_viewport_columns = nr_viewport_columns;
-		last_nr_viewport_rows = nr_viewport_rows;
-		if (render_mpx_mode == HM_QUILT) {
-			glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			vi = 0;
-			for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
-				for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
-					prog.set_uniform(ctx, "view", vi);
-					prog.set_uniform(ctx, "mvp_current", ctx.get_modelview_matrix()*ctx.get_projection_matrix());
-					prog.enable(ctx);
-					perform_render_pass(ctx, vi, RP_STEREO);
-					prog.disable(ctx);
-					if (++vi == nr_holo_views)
-						break;
-				}
-				if (vi == nr_holo_views)
-					break;
-			}
-		}
-		else {
-			for (vi = 0; vi < nr_holo_views; ++vi) {
-				prog.set_uniform(ctx, "view", vi);
-				prog.set_uniform(ctx, "mvp_current", ctx.get_modelview_matrix() * ctx.get_projection_matrix());
-				prog.enable(ctx);
-				volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
-				prog.disable(ctx);
-				glClear(GL_DEPTH_BUFFER_BIT);
-				perform_render_pass(ctx, vi, RP_STEREO);
-			}
-		}
-		initiate_terminal_render_pass(nr_holo_views - 1);
-	}
-	if (!multi_pass_ignore_finish(ctx)) {
-		current_e = (2.0f * vi) / (nr_holo_views- 1) - 1.0f;
-		if (render_mpx_mode == HM_QUILT) {
-			ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
-			glViewport(vp[0], vp[1], vp[2], vp[3]);
-			glScissor(vp[0], vp[1], vp[2], vp[3]);
-			glEnable(GL_SCISSOR_TEST);
-		}
-	}
-
-
 	if (generate_hologram) {
-		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width || display_fbo.get_height() != display_calib.height) {
+		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width ||
+			display_fbo.get_height() != display_calib.height)
+		{
 			display_tex.destruct(ctx);
 			display_fbo.destruct(ctx);
 			display_fbo.create(ctx, display_calib.width, display_calib.height);
@@ -1281,23 +1182,23 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			prog.set_uniform(ctx, "quilt_width", quilt_width);
 			prog.set_uniform(ctx, "quilt_height", quilt_height);
 			prog.set_uniform(ctx, "quilt_interpolate", quilt_interpolate);
-			quilt_depth_tex.enable(ctx, 0);	// --NOTE-- change to quilt_holo_tex once ready
+			quilt_render_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
-			volume_depth_tex.enable(ctx, 0);	// --NOTE-- change to volume_holo_tex once ready
+			volume_render_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
 			prog.set_uniform(ctx, "volume_tex", 0);
 		}
-		prog.set_uniform(ctx, "width",  display_calib.width);
+		prog.set_uniform(ctx, "width", display_calib.width);
 		prog.set_uniform(ctx, "height", display_calib.height);
 		prog.set_uniform(ctx, "length", display_calib.length);
 		prog.set_uniform(ctx, "step_x", display_calib.step_x);
 		prog.set_uniform(ctx, "step_y", display_calib.step_y);
 		prog.set_uniform(ctx, "offset", display_calib.offset);
-		prog.set_uniform(ctx, "x_min",  display_calib.x_min);
-		prog.set_uniform(ctx, "x_max",  display_calib.x_max);
-		prog.set_uniform(ctx, "y_min",  display_calib.y_min);
-		prog.set_uniform(ctx, "y_max",  display_calib.y_max);
+		prog.set_uniform(ctx, "x_min", display_calib.x_min);
+		prog.set_uniform(ctx, "x_max", display_calib.x_max);
+		prog.set_uniform(ctx, "y_min", display_calib.y_min);
+		prog.set_uniform(ctx, "y_max", display_calib.y_max);
 		prog.enable(ctx);
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		prog.disable(ctx);
@@ -1312,21 +1213,22 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			display_write_to_file = false;
 			on_set(&display_write_to_file);
 		}
-		vec4 src_rect(float(blit_offset_x), float(blit_offset_y), float(blit_offset_x+ctx.get_width()), float(blit_offset_y+ctx.get_height()));
+		vec4 src_rect(float(blit_offset_x), float(blit_offset_y), float(blit_offset_x + ctx.get_width()),
+					  float(blit_offset_y + ctx.get_height()));
 		display_fbo.blit_to(ctx, src_rect, cgv::render::BTB_COLOR_BIT, false);
 	}
 	else {
 		if (holo_mpx_mode == HM_QUILT)
 			quilt_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		else {
-			volume_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0); // --NOTE-- change to volume_holo_tex once ready
+			volume_fbo.attach(ctx, volume_render_tex, view_index, 0,
+							  0); // --NOTE-- change to volume_holo_tex once ready
 			volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
 	}
 }
 
-
-/// 
+///
 void holo_view_interactor::draw(cgv::render::context& ctx)
 {
 	if (show_focus) {
@@ -1364,19 +1266,14 @@ void holo_view_interactor::draw_focus()
 	glEnd();
 }
 
-
 /// return a shortcut to activate the gui without menu navigation
-//cgv::gui::shortcut holo_view_interactor::get_shortcut() const
+// cgv::gui::shortcut holo_view_interactor::get_shortcut() const
 //{
 //	return cgv::gui::shortcut('V', EM_CTRL);
-//}
-
+// }
 
 /// return a path in the main menu to select the gui
-std::string holo_view_interactor::get_menu_path() const
-{
-	return "View/Stereo Interactor";
-}
+std::string holo_view_interactor::get_menu_path() const { return "View/Stereo Interactor"; }
 
 /// you must overload this for gui creation
 void holo_view_interactor::create_gui()
@@ -1385,9 +1282,12 @@ void holo_view_interactor::create_gui()
 		align("\a");
 		add_member_control(this, "Use Gamepad", use_gamepad, "toggle");
 		add_member_control(this, "Gamepad Emulation", gamepad_emulation, "toggle");
-		add_member_control(this, "Pan Sensitivity", pan_sensitivity, "value_slider", "min=0.1;max=10;ticks=true;step=0.01;log=true");
-		add_member_control(this, "Zoom Sensitivity", zoom_sensitivity, "value_slider", "min=0.1;max=10;ticks=true;step=0.01;log=true");
-		add_member_control(this, "Rotate Sensitivity", rotate_sensitivity, "value_slider", "min=0.1;max=10;ticks=true;step=0.01;log=true");
+		add_member_control(this, "Pan Sensitivity", pan_sensitivity, "value_slider",
+						   "min=0.1;max=10;ticks=true;step=0.01;log=true");
+		add_member_control(this, "Zoom Sensitivity", zoom_sensitivity, "value_slider",
+						   "min=0.1;max=10;ticks=true;step=0.01;log=true");
+		add_member_control(this, "Rotate Sensitivity", rotate_sensitivity, "value_slider",
+						   "min=0.1;max=10;ticks=true;step=0.01;log=true");
 		add_member_control(this, "Deadzone", deadzone, "value_slider", "min=0;max=1;ticks=true;step=0.0001;log=true");
 		add_member_control(this, "Viewport Shrinkage", viewport_shrinkage, "value_slider", "min=0;max=40;ticks=true");
 		add_member_control(this, "Show Focus", show_focus, "check");
@@ -1398,34 +1298,43 @@ void holo_view_interactor::create_gui()
 		align("\a");
 		if (begin_tree_node("Stereo", eye_distance, false)) {
 			align("\a");
-			add_member_control(this, "Eye Distance", eye_distance, "value_slider", "min=0.01;max=5;ticks=true;step=0.00001;log=true");
-			add_member_control(this, "Parallax Zero Scale", parallax_zero_scale, "value_slider", "min=0.03;max=1;ticks=true;step=0.001;log=true");
+			add_member_control(this, "Eye Distance", eye_distance, "value_slider",
+							   "min=0.01;max=5;ticks=true;step=0.00001;log=true");
+			add_member_control(this, "Parallax Zero Scale", parallax_zero_scale, "value_slider",
+							   "min=0.03;max=1;ticks=true;step=0.001;log=true");
 			add_member_control(this, "Stereo Translate in Model View", stereo_translate_in_model_view, "check");
 			align("\b");
 			end_tree_node(eye_distance);
 		}
 		if (begin_tree_node("Display", display_calib, false)) {
-			align("\a");			
+			align("\a");
 			add_member_control(this, "Width", display_calib.width, "value_slider", "min=1920;max=8192;ticks=true");
 			add_member_control(this, "Height", display_calib.height, "value_slider", "min=1080;max=4096;ticks=true");
 			add_gui("X_min", display_calib.x_min, "", "options='min=0;max=0.1;ticks=true'");
 			add_gui("X_max", display_calib.x_max, "", "options='min=0.9;max=1;ticks=true'");
 			add_gui("Y_min", display_calib.y_min, "", "options='min=0;max=0.1;ticks=true'");
 			add_gui("Y_max", display_calib.y_max, "", "options='min=0.9;max=1;ticks=true'");
-			add_member_control(this, "Length", display_calib.length, "value_slider", "min=42;max=43;ticks=true;step=0.000001");
-			add_member_control(this, "Step_x", display_calib.step_x, "value_slider", "min=35;max=36;ticks=true;step=0.000001");
-			add_member_control(this, "Step_y", display_calib.step_y, "value_slider", "min=0.9;max=1.1;ticks=true;step=0.000001");
+			add_member_control(this, "Length", display_calib.length, "value_slider",
+							   "min=42;max=43;ticks=true;step=0.000001");
+			add_member_control(this, "Step_x", display_calib.step_x, "value_slider",
+							   "min=35;max=36;ticks=true;step=0.000001");
+			add_member_control(this, "Step_y", display_calib.step_y, "value_slider",
+							   "min=0.9;max=1.1;ticks=true;step=0.000001");
 			add_gui("Offset", display_calib.offset, "", "options='min=37;max=43;ticks=true'");
 			end_tree_node(display_calib);
 		}
 		if (begin_tree_node("Rendering", render_mpx_mode, true)) {
 			align("\a");
-			add_member_control(this, "Render multiplexing", render_mpx_mode, "dropdown", "enums='single view,quilt,volume'");
-			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown", "enums='single view,quilt,volume'");
+			add_member_control(this, "Render multiplexing", render_mpx_mode, "dropdown",
+							   "enums='single view,quilt,volume'");
+			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
+							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
 			add_member_control(this, "View Height", view_height, "value_slider", "min=480;max=1000;ticks=true");
-			add_member_control(this, "Number Rendered Views", nr_render_views, "value_slider", "min=2;max=100;ticks=true");
-			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider", "min=2;max=100;ticks=true");
+			add_member_control(this, "Number Rendered Views", nr_render_views, "value_slider",
+							   "min=2;max=100;ticks=true");
+			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
+							   "min=2;max=100;ticks=true");
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
@@ -1457,10 +1366,12 @@ void holo_view_interactor::create_gui()
 		///
 		add_gui("View Dir", view_dir, "direction", "options='min=-1;max=1;ticks=true'");
 		add_gui("View Up Dir", view_up_dir, "direction", "options='min=-1;max=1;ticks=true'");
-		connect_copy(add_control("Fix View Up Dir", fix_view_up_dir, "check")->value_change, rebind(this, &holo_view_interactor::on_rotation_change));
+		connect_copy(add_control("Fix View Up Dir", fix_view_up_dir, "check")->value_change,
+					 rebind(this, &holo_view_interactor::on_rotation_change));
 
 		add_member_control(this, "y View Angle", y_view_angle, "value_slider", "min=0;max=90;ticks=true;log=true");
-		add_member_control(this, "y Extent at Focus", y_extent_at_focus, "value_slider", "min=0;max=100;ticks=true;log=true;step=0.0001");
+		add_member_control(this, "y Extent at Focus", y_extent_at_focus, "value_slider",
+						   "min=0;max=100;ticks=true;log=true;step=0.0001");
 		add_member_control(this, "z Near", z_near, "value_slider", "min=0;max=100;log=true;step=0.00001");
 		add_member_control(this, "z Far", z_far, "value_slider", "min=0;max=10000;log=true;step=0.00001");
 		add_member_control(this, "Clip Relative To Extent", clip_relative_to_extent, "check");
@@ -1473,19 +1384,19 @@ void holo_view_interactor::on_set(void* m)
 {
 	if (m == &nr_render_views) {
 		if (find_control(view_index))
-			find_control(view_index)->set("max", nr_render_views-1);
-		//nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
-		update_member(&nr_holo_views);   //          force-synchronize those two parameters
+			find_control(view_index)->set("max", nr_render_views - 1);
+		nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
+		update_member(&nr_holo_views);	 //          force-synchronize those two parameters
 	}
 	else if (m == &nr_holo_views) {
 		if (find_control(view_index))
-			find_control(view_index)->set("max", nr_holo_views-1);
-		//nr_render_views = nr_holo_views; // --NOTE-- since no image-warping is implemented yet, we
+			find_control(view_index)->set("max", nr_holo_views - 1);
+		nr_render_views = nr_holo_views; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&nr_render_views); //          force-synchronize those two parameters
 	}
 	else if (m == &render_mpx_mode) {
-		//holo_mpx_mode = render_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
-		update_member(&holo_mpx_mode);   //          force-synchronize those two parameters
+		holo_mpx_mode = render_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
+		update_member(&holo_mpx_mode);	 //          force-synchronize those two parameters
 	}
 	else if (m == &holo_mpx_mode) {
 		render_mpx_mode = holo_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
@@ -1522,67 +1433,49 @@ void holo_view_interactor::set_default_view()
 /// you must overload this for gui creation
 bool holo_view_interactor::self_reflect(cgv::reflect::reflection_handler& srh)
 {
-	return
-		srh.reflect_member("enable_messages", enable_messages) &&
-		srh.reflect_member("use_gamepad", use_gamepad) &&
-		srh.reflect_member("gamepad_emulation", gamepad_emulation) &&
-		srh.reflect_member("deadzone", deadzone) &&
-		srh.reflect_member("pan_sensitivity", pan_sensitivity) &&
-		srh.reflect_member("rotate_sensitivity", rotate_sensitivity) &&
-		srh.reflect_member("zoom_sensitivity", zoom_sensitivity) &&
-		srh.reflect_member("focus_x", view::focus(0)) &&
-		srh.reflect_member("focus_y", view::focus(1)) &&
-		srh.reflect_member("focus_z", view::focus(2)) &&
-		srh.reflect_member("focus", view::focus) &&
-		srh.reflect_member("eye_distance", eye_distance) &&
-		srh.reflect_member("parallax_zero_scale", parallax_zero_scale) &&
-		srh.reflect_member("stereo_translate_in_model_view", stereo_translate_in_model_view) &&
-		srh.reflect_member("view_dir_x", view_dir(0)) &&
-		srh.reflect_member("view_dir_y", view_dir(1)) &&
-		srh.reflect_member("view_dir_z", view_dir(2)) &&
-		srh.reflect_member("view_dir", view_dir) &&
-		srh.reflect_member("fix_view_up_dir", fix_view_up_dir) &&
-		srh.reflect_member("up_dir_x", view_up_dir(0)) &&
-		srh.reflect_member("up_dir_y", view_up_dir(1)) &&
-		srh.reflect_member("up_dir_z", view_up_dir(2)) &&
-		srh.reflect_member("up_dir", view_up_dir) &&
-		srh.reflect_member("y_view_angle", y_view_angle) &&
-		srh.reflect_member("extent", y_extent_at_focus) &&
-		srh.reflect_member("z_near", z_near) &&
-		srh.reflect_member("z_far", z_far) &&
-		srh.reflect_member("two_d_enabled", two_d_enabled) &&
-		srh.reflect_member("show_focus", show_focus) &&
-		srh.reflect_member("clip_relative_to_extent", clip_relative_to_extent) &&
+	return srh.reflect_member("enable_messages", enable_messages) && srh.reflect_member("use_gamepad", use_gamepad) &&
+		   srh.reflect_member("gamepad_emulation", gamepad_emulation) && srh.reflect_member("deadzone", deadzone) &&
+		   srh.reflect_member("pan_sensitivity", pan_sensitivity) &&
+		   srh.reflect_member("rotate_sensitivity", rotate_sensitivity) &&
+		   srh.reflect_member("zoom_sensitivity", zoom_sensitivity) && srh.reflect_member("focus_x", view::focus(0)) &&
+		   srh.reflect_member("focus_y", view::focus(1)) && srh.reflect_member("focus_z", view::focus(2)) &&
+		   srh.reflect_member("focus", view::focus) && srh.reflect_member("eye_distance", eye_distance) &&
+		   srh.reflect_member("parallax_zero_scale", parallax_zero_scale) &&
+		   srh.reflect_member("stereo_translate_in_model_view", stereo_translate_in_model_view) &&
+		   srh.reflect_member("view_dir_x", view_dir(0)) && srh.reflect_member("view_dir_y", view_dir(1)) &&
+		   srh.reflect_member("view_dir_z", view_dir(2)) && srh.reflect_member("view_dir", view_dir) &&
+		   srh.reflect_member("fix_view_up_dir", fix_view_up_dir) && srh.reflect_member("up_dir_x", view_up_dir(0)) &&
+		   srh.reflect_member("up_dir_y", view_up_dir(1)) && srh.reflect_member("up_dir_z", view_up_dir(2)) &&
+		   srh.reflect_member("up_dir", view_up_dir) && srh.reflect_member("y_view_angle", y_view_angle) &&
+		   srh.reflect_member("extent", y_extent_at_focus) && srh.reflect_member("z_near", z_near) &&
+		   srh.reflect_member("z_far", z_far) && srh.reflect_member("two_d_enabled", two_d_enabled) &&
+		   srh.reflect_member("show_focus", show_focus) &&
+		   srh.reflect_member("clip_relative_to_extent", clip_relative_to_extent) &&
 
-		srh.reflect_member("display_width", display_calib.width) &&
-		srh.reflect_member("display_height", display_calib.height) &&
-		srh.reflect_member("display_x_min", display_calib.x_min) &&
-		srh.reflect_member("display_x_max", display_calib.x_max) &&
-		srh.reflect_member("display_y_min", display_calib.y_min) &&
-		srh.reflect_member("display_y_max", display_calib.y_max) &&
-		srh.reflect_member("display_length", display_calib.length) &&
-		srh.reflect_member("display_step_x", display_calib.step_x) &&
-		srh.reflect_member("display_step_y", display_calib.step_y) &&
-		srh.reflect_member("display_offset", display_calib.offset) &&
-		srh.reflect_member("render_mpx_mode", render_mpx_mode) &&
-		srh.reflect_member("holo_mpx_mode", holo_mpx_mode) &&
-		srh.reflect_member("view_width", view_width) &&
-		srh.reflect_member("view_height", view_height) &&
-		srh.reflect_member("nr_render_views", nr_render_views) &&
-		srh.reflect_member("nr_holo_views", nr_holo_views) &&
-		srh.reflect_member("view_index", view_index) &&
-		srh.reflect_member("blit_offset_x", blit_offset_x) &&
-		srh.reflect_member("blit_offset_y", blit_offset_y) &&
-		srh.reflect_member("generate_hologram", generate_hologram) &&
-		srh.reflect_member("quilt_bg_color", quilt_bg_color) &&
-		srh.reflect_member("quilt_use_offline_texture", quilt_use_offline_texture) &&
-		srh.reflect_member("quilt_width", quilt_width) &&
-		srh.reflect_member("quilt_height", quilt_height) &&
-		srh.reflect_member("quilt_nr_cols", quilt_nr_cols) &&
-		srh.reflect_member("quilt_nr_rows", quilt_nr_rows) &&
-		srh.reflect_member("quilt_interpolate", quilt_interpolate);
+		   srh.reflect_member("display_width", display_calib.width) &&
+		   srh.reflect_member("display_height", display_calib.height) &&
+		   srh.reflect_member("display_x_min", display_calib.x_min) &&
+		   srh.reflect_member("display_x_max", display_calib.x_max) &&
+		   srh.reflect_member("display_y_min", display_calib.y_min) &&
+		   srh.reflect_member("display_y_max", display_calib.y_max) &&
+		   srh.reflect_member("display_length", display_calib.length) &&
+		   srh.reflect_member("display_step_x", display_calib.step_x) &&
+		   srh.reflect_member("display_step_y", display_calib.step_y) &&
+		   srh.reflect_member("display_offset", display_calib.offset) &&
+		   srh.reflect_member("render_mpx_mode", render_mpx_mode) &&
+		   srh.reflect_member("holo_mpx_mode", holo_mpx_mode) && srh.reflect_member("view_width", view_width) &&
+		   srh.reflect_member("view_height", view_height) && srh.reflect_member("nr_render_views", nr_render_views) &&
+		   srh.reflect_member("nr_holo_views", nr_holo_views) && srh.reflect_member("view_index", view_index) &&
+		   srh.reflect_member("blit_offset_x", blit_offset_x) && srh.reflect_member("blit_offset_y", blit_offset_y) &&
+		   srh.reflect_member("generate_hologram", generate_hologram) &&
+		   srh.reflect_member("quilt_bg_color", quilt_bg_color) &&
+		   srh.reflect_member("quilt_use_offline_texture", quilt_use_offline_texture) &&
+		   srh.reflect_member("quilt_width", quilt_width) && srh.reflect_member("quilt_height", quilt_height) &&
+		   srh.reflect_member("quilt_nr_cols", quilt_nr_cols) && srh.reflect_member("quilt_nr_rows", quilt_nr_rows) &&
+		   srh.reflect_member("quilt_interpolate", quilt_interpolate);
 }
 
 // register our custom holo-view interactor
 #include <cgv/base/register.h>
-cgv::base::object_registration_1<holo_view_interactor, const char*> obj1("Holo Interactor", "registration of holo interactor");
+cgv::base::object_registration_1<holo_view_interactor, const char*> obj1("Holo Interactor",
+																		 "registration of holo interactor");

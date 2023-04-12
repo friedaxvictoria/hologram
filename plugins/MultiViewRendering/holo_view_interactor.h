@@ -12,7 +12,6 @@
 #include <cgv/reflect/reflect_enum.h>
 #include <cgv_gl/gl/gl.h>
 #include <glsu/GL/glsu.h>
-#include <chrono>
 #if defined(_WINDOWS) || defined(WIN32) || defined(WIN64)
 #undef max
 #undef min
@@ -119,8 +118,7 @@ protected:
 	int blit_offset_x = 0, blit_offset_y = 0;
 	bool generate_hologram = true;
 	bool display_write_to_file = false;
-	std::chrono::steady_clock::time_point time_start, time_end;
-  private:
+private:
 	cgv::render::texture display_tex;
 	cgv::render::frame_buffer display_fbo;
 protected:
@@ -137,18 +135,15 @@ protected:
 protected:
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
-	cgv::render::texture quilt_render_tex, quilt_depth_tex, quilt_holo_tex;
+	cgv::render::texture quilt_render_tex, quilt_holo_tex;
 	cgv::render::frame_buffer quilt_fbo;
 	cgv::render::render_buffer quilt_depth_buffer;
 	cgv::render::shader_program quilt_prog;
 
-	cgv::render::texture volume_render_tex, volume_depth_tex, volume_holo_tex;
+	cgv::render::texture volume_render_tex, volume_holo_tex;
 	cgv::render::frame_buffer volume_fbo;
 	cgv::render::render_buffer volume_depth_buffer;
 	cgv::render::shader_program volume_prog;
-
-	cgv::render::shader_program warp_prog;
-	cgv::render::frame_buffer volume_warp_fbo, quilt_warp_fbo;
 
 
 public:
