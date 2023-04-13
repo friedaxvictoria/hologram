@@ -177,7 +177,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		bool with_interpolated_holes = false;
 		bool nr_rendered_views_changed = false;
 
-		float epsilon = 0;
+		float epsilon = 0.02;
 	} test;
 
   public:
@@ -547,7 +547,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
 
-				test.projection_dir[i] = vec3((test.render_offset[i] * x_ext_half) / z_zero, 0, -1);
+				test.projection_dir[i] = normalize(vec3((test.render_offset[i] * x_ext_half), 0, z_zero));
 
 				ctx.push_projection_matrix();
 				ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
@@ -805,7 +805,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 						   "min=0.5;max=4;step=0.5;tooltip='multiply viewport resolution by this factor when "
 						   "determining heightmap resolution'");
 		add_member_control(this, "epsilon", test.epsilon, "value_slider",
-						   "min=0;max=0.02;step=0.00001;tooltip='how strong should the discarding of cliff artefacts be'");
+						   "min=0;max=0.1;step=0.00001;tooltip='how strong should the discarding of cliff artefacts be'");
 		connect_copy(
 			  add_member_control(
 					this, "nr rendered views", test.nr_renders, "value_slider",
