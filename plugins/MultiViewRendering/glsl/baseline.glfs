@@ -1,17 +1,23 @@
 #version 330 core
 
 uniform bool prune_empty;
-
 uniform bool with_interpolated_holes;
+uniform vec3 projection_dir;
+uniform float epsilon;
 
 in vec4 color_fs;
 in float discard_fs;
+in vec4 pos_world;
 
 out vec4 color;
 
 
 void main()
 {
+	vec3 normal = normalize(cross(dFdx(pos_world.xyz), dFdy(pos_world.xyz)));
+	float ortho_to_proj = abs(dot(projection_dir, normal));
+	if (ortho_to_proj < epsilon && !with_interpolated_holes)
+		discard;
 	if (prune_empty && ((discard_fs > 0 && !with_interpolated_holes) || (discard_fs == 1 && with_interpolated_holes)))
 		discard; // don't render "empty" geometry
 	color = color_fs;

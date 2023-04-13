@@ -15,14 +15,13 @@ uniform sampler2D depth;
 
 uniform mat4 inv_proj_source;
 uniform mat4 modelview_source;
-uniform mat4 proj_target;
-uniform mat4 modelview_target;
 
 in vec4 position;
 in vec2 texcoord;
 
 out vec4 color_fs;
 out float discard_fs;
+out vec4 pos_world;
 
 
 void main()
@@ -89,4 +88,5 @@ void main()
 	//pos_target -= z_dir * z_coord;             
 	
 	gl_Position = get_projection_matrix() * pos_target + 0.0000001 * position;
+	pos_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
 }

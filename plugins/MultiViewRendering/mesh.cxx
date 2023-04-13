@@ -122,9 +122,10 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	float eye_distance;
 	bool stereo_translate_in_model_view = false;
 
-	float z_near_derived = z_near;
-	float z_far_derived = z_far;
+	double z_near_derived = z_near;
+	double z_far_derived = z_far;
 	float x_ext_half, z_zero;
+	vec3 cam_dir;
 
 
 	////
@@ -137,7 +138,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		cgv::render::managed_frame_buffer render_fbo[3];
 
 		// our base projection matrix
-		mat4 mat_proj_render[3];
+		mat4 inv_mat_proj_render[3];
 		mat4 proj_for_render;
 
 		// image warping test shaders
@@ -170,9 +171,13 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		int nr_renders = 3;
 		float render_offset[3];
 
+		vec3 projection_dir[3];
+
 		bool show_holes = true;
 		bool with_interpolated_holes = false;
 		bool nr_rendered_views_changed = false;
+
+		float epsilon = 0;
 	} test;
 
   public:
@@ -450,16 +455,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		ctx.set_projection_matrix(P);
 	}
 
-	void gl_set_modelview_matrix(cgv::render::context& ctx, float e, double aspect,
-													   const cgv::render::view& view)
-	{
-		ctx.set_modelview_matrix(cgv::math::identity4<double>());
-		if (stereo_translate_in_model_view)
-			ctx.mul_modelview_matrix(
-				  cgv::math::stereo_translate_screen4<double>(e, eye_distance, view.get_y_extent_at_focus() * aspect));
-		ctx.mul_modelview_matrix(cgv::math::look_at4(view.get_eye(), view.get_focus(), view.get_view_up_dir()));
-	}
-
 	/// draw the mesh surface
 	void draw_surface(context& ctx, bool opaque_part)
 	{
@@ -507,16 +502,15 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		if (test.shoot_heightmap) {
 			static const vec3 right_local(1, 0, 0);
 			const mat4 invMV = inv(ctx.get_modelview_matrix());
-			const vec3 cam_pos = view->get_eye(), cam_dir = view->get_view_dir(),
+			cam_dir = view->get_view_dir();
+			const vec3 cam_pos = view->get_eye(),
 					   cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
 					   cam_up = view->get_view_up_dir(); // --CAREFUL-- get_view_up_dir is not 100% reliable,
 														 // consider inferring from modelview matrix!
 			// - find out where the scene ends along world-space camera viewing direction
 			auto [bmin, bmax] = project_box_onto_dir(M_bbox, cam_dir);
 			// - find out how large the quad needs to be to fill the whole frustum at that point
-			const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = bmax - cam_depth_world,
-						y_ext = (float)view->get_y_extent_at_depth(heightmap_depth_eye, false),
-						aspect = (float)ctx.get_width() / ctx.get_height(), x_ext = y_ext * aspect;
+			const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = bmax - cam_depth_world, y_ext = (float)view->get_y_extent_at_depth(heightmap_depth_eye, false), aspect = (float)ctx.get_width() / ctx.get_height(), x_ext = y_ext * aspect;
 			// - position the heightmap just behind the scene, facing the camera at the moment of capture:
 			//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) * Scale(y_ext)
 			test.heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
@@ -551,9 +545,12 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				translate.identity();
 				translate(0, 3) = (-1) * test.render_offset[i] * x_ext_half;
 
+				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
+
+				test.projection_dir[i] = vec3((test.render_offset[i] * x_ext_half) / z_zero, 0, -1);
+
 				ctx.push_projection_matrix();
-				test.mat_proj_render[i] = test.proj_for_render * shear * translate;
-				ctx.set_projection_matrix(test.mat_proj_render[i]);
+				ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
 				ctx.push_modelview_matrix();
 				ctx.set_modelview_matrix(test.modelview_source * inv(test.heightmap_trans));
 			}
@@ -622,33 +619,30 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			float offset = (2.0f * test.visible_view) / 44 - 1.0f;
 
 			ctx.push_projection_matrix();
-			ctx.push_modelview_matrix();
 			gl_set_projection_matrix(ctx, offset, (float)ctx.get_width() / ctx.get_height());
-			gl_set_modelview_matrix(ctx, offset, (float)ctx.get_width() / ctx.get_height(), *this);
-
-			//std::cout << "after calc: " << ctx.get_projection_matrix() << std::endl;
-
-			mat4 p, mv;
-			p = ctx.get_projection_matrix();
-			mv = ctx.get_modelview_matrix() * test.heightmap_trans;
-
+			mat4 proj = ctx.get_projection_matrix();
 			ctx.pop_projection_matrix();
-			ctx.pop_modelview_matrix();
 
+			mat4 new_proj = ctx.get_projection_matrix();
+			new_proj(0, 2) = proj(0, 2);
+			new_proj(0, 3) = proj(0, 3);
+			ctx.set_projection_matrix(new_proj);
 
 			if (test.show_holes) {
 				// render pass for displaying holes when warping in green
 				glDisable(GL_CULL_FACE);
 				glDisable(GL_DEPTH_TEST);
 
-				test.holes_shader.set_uniform(ctx, "inv_proj_source", inv(test.mat_proj_render[0]));
+				test.holes_shader.set_uniform(ctx, "inv_proj_source", inv(test.inv_mat_proj_render[0]));
 				mesh_for_holes_info.draw_all(ctx);
 
 				glEnable(GL_CULL_FACE);
 				glEnable(GL_DEPTH_TEST);
 			}
 
+
 			for (int i = 0; i < test.nr_renders; i++) {
+
 				texture &color_tex = *test.render_fbo[i].attachment_texture_ptr("color"),
 						&depth_tex = *test.render_fbo[i].attachment_texture_ptr("depth");
 				// render pass for baseline approach
@@ -657,15 +651,14 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				depth_tex.enable(ctx, 1);
 				test.baseline_shader.set_uniform(ctx, "depth", 1);
 
-				test.baseline_shader.set_uniform(ctx, "inv_proj_source", inv(test.mat_proj_render[i]));
+				test.baseline_shader.set_uniform(ctx, "inv_proj_source", test.inv_mat_proj_render[i]);
 				test.baseline_shader.set_uniform(ctx, "modelview_source", test.modelview_source);
 				test.baseline_shader.set_uniform(ctx, "prune_empty", test.prune_heightmap);
 				test.baseline_shader.set_uniform(ctx, "with_interpolated_holes",
 												 test.with_interpolated_holes && test.render_offset[i] == 0.0f);
-				test.baseline_shader.set_uniform(ctx, "proj_target", p);
-				test.baseline_shader.set_uniform(ctx, "modelview_target", mv);
+				test.baseline_shader.set_uniform(ctx, "projection_dir", test.projection_dir[i]);
+				test.baseline_shader.set_uniform(ctx, "epsilon", test.epsilon);
 
-				//std::cout << "on set: " << ctx.get_projection_matrix() << std::endl;
 				test.baseline_shader.enable(ctx);
 				glDisable(GL_CULL_FACE);
 				ctx.push_modelview_matrix();
@@ -811,6 +804,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		add_member_control(this, "oversampling factor", test.heightmap_oversampling, "value_slider",
 						   "min=0.5;max=4;step=0.5;tooltip='multiply viewport resolution by this factor when "
 						   "determining heightmap resolution'");
+		add_member_control(this, "epsilon", test.epsilon, "value_slider",
+						   "min=0;max=0.02;step=0.00001;tooltip='how strong should the discarding of cliff artefacts be'");
 		connect_copy(
 			  add_member_control(
 					this, "nr rendered views", test.nr_renders, "value_slider",
