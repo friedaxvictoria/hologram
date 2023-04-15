@@ -497,6 +497,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
 		//          initial mono depth map test case)
+		test.render_heightmap = true;
 
 		if (test.shoot_heightmap) {
 			static const vec3 right_local(1, 0, 0);
@@ -613,17 +614,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		}
 
 		if (test.render_heightmap) {
-			float offset = (2.0f * test.visible_view) / 44 - 1.0f;
-
-			ctx.push_projection_matrix();
-			gl_set_projection_matrix(ctx, offset, (float)ctx.get_width() / ctx.get_height());
-			mat4 proj = ctx.get_projection_matrix();
-			ctx.pop_projection_matrix();
-
-			mat4 new_proj = ctx.get_projection_matrix();
-			new_proj(0, 2) = proj(0, 2);
-			new_proj(0, 3) = proj(0, 3);
-			ctx.set_projection_matrix(new_proj);
 
 			if (test.show_holes) {
 				// render pass for displaying holes when warping in green
@@ -809,12 +799,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 										"min=1;max=3;step=1;tooltip='change how many views are rendered properly'")
 					->value_change,
 			  cgv::signal::rebind(this, &mesh_viewer::nr_rendered_views_change));
-		connect_copy(
-			  add_member_control(
-					this, "visible view", test.visible_view, "value_slider",
-					"min=0;max=44;step=1;tooltip='which view should be calculated with the heightmap calculations'")
-					->value_change,
-			  cgv::signal::rebind(this, &mesh_viewer::visible_view_change));
 		add_member_control(this, "show holes", test.show_holes, "check");
 		add_member_control(this, "smooth holes into background", test.with_interpolated_holes, "check");
 		connect_copy(add_button("Shoot!", "tooltip='Updates the heightmap from the current view'")->click,
