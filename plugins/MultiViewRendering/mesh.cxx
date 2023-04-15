@@ -117,14 +117,13 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	cone_render_style cone_style;
 	attribute_array_manager cone_aam;
 
-	cgv::render::clipped_view* view = nullptr;
+	cgv::render::stereo_view* view = nullptr;
 
 	float eye_distance;
 	bool stereo_translate_in_model_view = false;
 
 	double z_near_derived = z_near;
 	double z_far_derived = z_far;
-	float x_ext_half, z_zero;
 	vec3 cam_dir;
 
 
@@ -177,7 +176,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		bool with_interpolated_holes = false;
 		bool nr_rendered_views_changed = false;
 
-		float epsilon = 0.02;
+		float epsilon = 0.07;
 	} test;
 
   public:
@@ -255,7 +254,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		// update view
 		// make sure we have the view available
 		if (!view) {
-			view = dynamic_cast<clipped_view*>(find_view_as_node());
+			view = dynamic_cast<stereo_view*>(find_view_as_node());
 			dynamic_cast<node*>(view)->set(
 				  "clip_relative_to_extent",
 				  true); // comment this line to use default behaviour of adaptating znear/zfar to scene
@@ -517,10 +516,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 										 vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});
 			test.modelview_source = ctx.get_modelview_matrix() * test.heightmap_trans;
 			
-			x_ext_half = 0.5f * x_ext;
-			const float y_ext_half = 0.5f * y_ext, znear = bmin - cam_depth_world;
-
-			z_zero = cam_depth_world;
+			const float x_ext_half = 0.5f * x_ext, y_ext_half = 0.5f * y_ext, znear = bmin - cam_depth_world;
 
 			// change projection matrix to orthogonal according to the current (view-dependent) extends of our
 			// heightmap
@@ -540,14 +536,15 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 				mat4 shear, translate;
 				shear.identity();
-				shear(0, 2) = (test.render_offset[i] * x_ext_half) / z_zero;
+				shear(0, 2) = 0.5f*test.render_offset[i]*view->get_eye_distance()/view->get_depth_of_focus();
 
 				translate.identity();
-				translate(0, 3) = (-1) * test.render_offset[i] * x_ext_half;
+				translate(0, 3) = 0.5f * test.render_offset[i] * view->get_eye_distance();
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
 
-				test.projection_dir[i] = normalize(vec3((test.render_offset[i] * x_ext_half), 0, z_zero));
+				test.projection_dir[i] = normalize(vec3(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
+									 -view->get_depth_of_focus()));
 
 				ctx.push_projection_matrix();
 				ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
