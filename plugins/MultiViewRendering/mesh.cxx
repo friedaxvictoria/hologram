@@ -540,19 +540,23 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				// move the heightmap to the correct place in world-space
 				// - determine the camera orientation
 
+				float x_of_cam = 0.5f * test.render_offset[i] * view->get_eye_distance() * ctx.get_width() *
+								 znear_from_proj4(test.proj_for_render);
+
 				mat4 shear, translate;
 				shear.identity();
-				shear(0, 2) = 0.5f*test.render_offset[i]*view->get_eye_distance()/view->get_depth_of_focus();
+				shear(0, 2) = x_of_cam/
+							  view->get_depth_of_focus();
 
 				translate.identity();
-				translate(0, 3) = 0.5f * test.render_offset[i] * view->get_eye_distance();
+				translate(0, 3) = x_of_cam;
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
 
-				vec3 proj_on_znear = inv(test.modelview_source)*test.inv_mat_proj_render[i]* vec4(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
+				vec3 proj_on_znear = inv(test.modelview_source)*test.inv_mat_proj_render[i]* vec4(x_of_cam, 0,
 										  znear_from_invproj4(test.inv_mat_proj_render[i]), 1);
 				vec3 proj_on_zfar = inv(test.modelview_source) * test.inv_mat_proj_render[i] *
-									vec4(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
+									vec4(x_of_cam, 0,
 										 zfar_from_invproj4(test.inv_mat_proj_render[i]), 1);
 
 				test.projection_dir[i] = vec3(normalize(proj_on_znear - proj_on_zfar));
