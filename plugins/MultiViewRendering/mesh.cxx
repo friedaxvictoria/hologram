@@ -169,7 +169,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		int nr_renders = 3;
 		float render_offset[3];
-
 		vec3 projection_dir[3];
 
 		bool show_holes = true;
@@ -179,6 +178,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		float epsilon = 0.02;
 
 		bool ortho = false;
+
+		float x_ext;
 	} test;
 
   public:
@@ -512,14 +513,17 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			// - find out where the scene ends along world-space camera viewing direction
 			auto [bmin, bmax] = project_box_onto_dir(M_bbox, cam_dir);
 			// - find out how large the quad needs to be to fill the whole frustum at that point
-			const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = bmax - cam_depth_world, y_ext = (float)view->get_y_extent_at_depth(heightmap_depth_eye, false), aspect = (float)ctx.get_width() / ctx.get_height(), x_ext = y_ext * aspect;
+			const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = bmax - cam_depth_world,
+						y_ext = (float)view->get_y_extent_at_depth(heightmap_depth_eye, false),
+						aspect = (float)ctx.get_width() / ctx.get_height();
+			test.x_ext = y_ext * aspect;
 			// - position the heightmap just behind the scene, facing the camera at the moment of capture:
 			//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) * Scale(y_ext)
 			test.heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
 										 vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});
 			test.modelview_source = ctx.get_modelview_matrix() * test.heightmap_trans;
 			
-			const float x_ext_half = 0.5f * x_ext, y_ext_half = 0.5f * y_ext, znear = bmin - cam_depth_world;
+			const float x_ext_half = 0.5f * test.x_ext, y_ext_half = 0.5f * y_ext, znear = bmin - cam_depth_world;
 
 			// change projection matrix to orthogonal according to the current (view-dependent) extends of our
 			// heightmap
@@ -540,8 +544,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				// move the heightmap to the correct place in world-space
 				// - determine the camera orientation
 
-				float x_of_cam = 0.5f * test.render_offset[i] * view->get_eye_distance() * ctx.get_width() *
-								 znear_from_proj4(test.proj_for_render);
+				float x_of_cam = 0.5f * test.render_offset[i] * view->get_eye_distance() * test.x_ext;
 
 				mat4 shear, translate;
 				shear.identity();
