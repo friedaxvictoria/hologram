@@ -1,4 +1,4 @@
-#version 330 core
+#version 460 core
 
 /***** begin interface of view.glsl ***********************************/
 mat4 get_modelview_matrix();
@@ -26,7 +26,7 @@ out vec4 pos_source_world;
 
 void main()
 {
-	color_fs = textureLod(color, texcoord, 0);	// textureLod does not determine mip levels itself and is thus
+	color_fs = textureLod(color, texcoord,0);	// textureLod does not determine mip levels itself and is thus
 	                                            // a bit faster than texture().
 
 	float depth = textureLod(depth, texcoord, 0).r;

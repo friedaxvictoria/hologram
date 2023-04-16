@@ -176,7 +176,9 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		bool with_interpolated_holes = false;
 		bool nr_rendered_views_changed = false;
 
-		float epsilon = 0.07;
+		float epsilon = 0.02;
+
+		bool ortho = false;
 	} test;
 
   public:
@@ -521,7 +523,10 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 			// change projection matrix to orthogonal according to the current (view-dependent) extends of our
 			// heightmap
-			test.proj_for_render = ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye);
+			if (!test.ortho)
+				test.proj_for_render = ctx.get_projection_matrix();
+			else
+				test.proj_for_render = ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, znear, heightmap_depth_eye);
 		}
 
 		for (int i = 0; i < test.nr_renders; i++) {
@@ -544,8 +549,13 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
 
-				test.projection_dir[i] = normalize(vec3(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
-									 -view->get_depth_of_focus()));
+				vec3 proj_on_znear = inv(test.modelview_source)*test.inv_mat_proj_render[i]* vec4(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
+										  znear_from_invproj4(test.inv_mat_proj_render[i]), 1);
+				vec3 proj_on_zfar = inv(test.modelview_source) * test.inv_mat_proj_render[i] *
+									vec4(0.5f * test.render_offset[i] * view->get_eye_distance(), 0,
+										 zfar_from_invproj4(test.inv_mat_proj_render[i]), 1);
+
+				test.projection_dir[i] = vec3(normalize(proj_on_znear - proj_on_zfar));
 
 				ctx.push_projection_matrix();
 				ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
@@ -612,7 +622,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			}
 		
 		}
-
+		
 		if (test.render_heightmap) {
 
 			if (test.show_holes) {
@@ -620,7 +630,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				glDisable(GL_CULL_FACE);
 				glDisable(GL_DEPTH_TEST);
 
-				test.holes_shader.set_uniform(ctx, "inv_proj_source", inv(test.inv_mat_proj_render[0]));
 				mesh_for_holes_info.draw_all(ctx);
 
 				glEnable(GL_CULL_FACE);
@@ -689,11 +698,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	void on_shoot(void)
 	{
 		test.shoot_heightmap = true;
-		post_redraw();
-	}
-	void visible_view_change(void)
-	{
-		//test.visible_view_changed = true;
 		post_redraw();
 	}
 
@@ -801,6 +805,9 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			  cgv::signal::rebind(this, &mesh_viewer::nr_rendered_views_change));
 		add_member_control(this, "show holes", test.show_holes, "check");
 		add_member_control(this, "smooth holes into background", test.with_interpolated_holes, "check");
+		connect_copy(add_member_control(this, "with orthographic matix", test.ortho, "check")
+						   ->value_change,
+					 cgv::signal::rebind(this, &mesh_viewer::on_shoot));
 		connect_copy(add_button("Shoot!", "tooltip='Updates the heightmap from the current view'")->click,
 					 cgv::signal::rebind(this, &mesh_viewer::on_shoot));
 
