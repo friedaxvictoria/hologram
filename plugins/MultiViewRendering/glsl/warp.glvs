@@ -33,11 +33,13 @@ out float discard_fs;
 
 void main()
 {  	
-	float pt_depth = textureLod(depth, texcoord, 0).r;
+	/*float pt_depth = textureLod(depth, texcoord, 0).r;
 
 	vec4 pt_world_coord = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.s-1, 2*pt_depth-1, 1);
 
-	float range_value = length(vec4(eye_source,1) - pt_world_coord);
+	float range_value = length(vec4(eye_source,1) - pt_world_coord);*/
+
+	float range_value = 2 * textureLod(depth, texcoord, 0).r - 1;
 
 	float disparity = length(p_1*vec3(texcoord, 1))/range_value;
 
