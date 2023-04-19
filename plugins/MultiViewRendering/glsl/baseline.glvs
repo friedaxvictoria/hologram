@@ -21,6 +21,7 @@ in vec2 texcoord;
 
 out vec4 color_fs;
 out float discard_fs;
+out vec3 direction_fs;
 out vec4 pos_source_world;
 
 
@@ -32,47 +33,10 @@ void main()
 	float depth = textureLod(depth, texcoord, 0).r;
 	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
 
-	// Our modelview matrix that transforms the heightmap into the eye space of the target view has some scaling
-	// in it. The reason for that can be explained as follows:
-	// (1) To make maximum use of the heightmap's resolution, we position the "ground" plane z_far as close to the
-	//     backmost scene vertex as possible. Thus, the distance to said plane changes depending on the camera
-	//     position.
-	// (2) To capture all potentially visible scene elements, we have to chose the size of the quad such that it
-	//     exactly fits inside the frustum, touching the side clipping planes.
-	// (3) Points (1) and (2) imply that the "physical" extents of the quad in general change with camera
-	//     movement. We don't want to re-tessallate the quad everytime the view changes (that would be very costly
-	//     on the CPU), so the only other choice is to get it up to the correct size in the vertex shader.
-	// --> Thus, we incorporate scaling in the "model transform" part of the modelview matrix. As basis for
-	//     scaling, we use the y-extent (y_ext) of the viewing frustum at the z_far plane and apply it to the quad
-	//     which is always tessellated into a "height" of exactly 1 unit, i.e. final quad height is 1*y_ext;
-	//
-	// To deal with that, we could either apply the inverse scaling factor (1/y_ext) to the height, or we can
-	// apply the offset _after_ the modelview transformation. In this shader, we do the latter (it is unclear
-	// though which is actually better).
-
-	// The cheapest way to extract the actual height from the depth map is to interpret depth [0..1] as a linear
-	// interpolation coefficient between [znear...zfar]. This way we don't even need any matrix multiplication at
-	// all (and we can pre-calculate the inverse projection on the CPU and pass it as uniform). The formula to get
-	// the near/far clipping planes from a projection matrix are as follows:
-	//
-	// P...projection matrix ,   P^-1...inverse projection matrix ,   (P^-1)_ij...element of P^-1 at i-th col,
-	//                                                                            j-th row
-	//           -(P^-1)_22 + (P^-1)_32
-	// z_near =  ───────────────────────
-	//  |        -(P^-1)_23 + (P^-1)_33
-	//  |
-	//  └──> follows from the fact that    P^-1 * (0,0,-1,1)^T    is a point on the near clipping plane in eye space
-	//
-	//
-	//            (P^-1)_22 + (P^-1)_32
-	// z_far  =  ───────────────────────
-	//  |         (P^-1)_23 + (P^-1)_33
-	//  |
-	//  └──> follows from the fact that    P^-1 * (0,0,1,1)^T     is a point on the far clipping plane in eye space
-	//
-	// Furthermore, the denominators -(P^-1)_23 + (P^-1)_33 and (P^-1)_23 + (P^-1)_33 always evaluate to 1 for
-	// orthogonal projections and can thus be dropped from the calculation.
-
+	// caluculate the projection direction based off of the pixel coordinates
+	vec4 proj_on_znear = inverse(modelview_source) * inv_proj_source * vec4(position.x, position.y, -1, 1);
+	vec4 proj_on_zfar = inverse(modelview_source) * inv_proj_source * vec4(position.x, position.y, 1, 1);
+	direction_fs = normalize(proj_on_zfar.xyz - proj_on_znear.xyz);
 	
 	//float znear_w = -inv_proj_source[2][3] + inv_proj_source[3][3],
 	//      zfar_w = inv_proj_source[2][3] + inv_proj_source[3][3];
@@ -85,8 +49,7 @@ void main()
 
 	//vec4 pos_target = get_modelview_matrix() * position; 
 	pos_source_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
-	vec4 pos_target = get_modelview_matrix() * pos_source_world;
 	//pos_target -= z_dir * z_coord;             
 	
-	gl_Position = get_projection_matrix() * pos_target + 0.0000001 * position;
+	gl_Position = get_projection_matrix() * get_modelview_matrix() * pos_source_world + 0.0000001 * position;
 }

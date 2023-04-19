@@ -1092,7 +1092,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 }
 
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
-{
+{	
 	if (render_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;

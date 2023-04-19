@@ -1,7 +1,14 @@
-#version 150
+#version 330 core
 
-in vec4 colour;
+in vec4 color_fs;
 
-void main(){
-	gl_FragColor = colour;
+out vec4 color;
+in float discard_fs;
+
+
+void main()
+{
+	if (discard_fs > 0)
+		discard; // don't render "empty" geometry
+	color = color_fs;
 }

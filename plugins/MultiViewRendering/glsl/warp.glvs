@@ -1,60 +1,57 @@
-#version 150
+#version 460 core
 
-uniform uint width = 3840u;
-uniform uint height = 2160u;
+/***** begin interface of view.glsl ***********************************/
+mat4 get_modelview_matrix();
+mat4 get_projection_matrix();
+mat4 get_modelview_projection_matrix();
+mat4 get_inverse_modelview_matrix();
+mat4 get_inverse_modelview_projection_matrix();
+mat3 get_normal_matrix();
+mat3 get_inverse_normal_matrix();
+/***** end interface of view.glsl ***********************************/
 
-uniform vec3 x_min = vec3(10.0f);
-uniform vec3 x_max = vec3(3830.0f);
-uniform vec3 y_min = vec3(10.0f);
-uniform vec3 y_max = vec3(2150.0f);
+uniform sampler2D color;
+uniform sampler2D depth;
 
-uniform mat4 mvp_current;
-uniform mat4 mvp_left; 
-uniform mat4 mvp_right;
+uniform mat3 p_2;
+uniform mat3 p_1;
+uniform mat4 inv_mvp_source;
 
-uniform uint num_views = 45u;
+uniform vec3 eye_source;
+uniform vec3 eye_target;
 
-uniform uint view;
+uniform float width;
+uniform float height;
 
-uniform sampler2D depth_tex;
-uniform sampler2D colour_tex;
+uniform float fac;
 
-out vec4 colour;
+in vec4 position;
+in vec2 texcoord;
 
-float calc_coord(float min, float max){
-	return min + view * (max - min) / num_views;
-}
+out vec4 color_fs;
+out float discard_fs;
 
 void main()
-{
-	mat4 mvp_current_inv = inverse(mvp_current);
+{  	
+	float pt_depth = textureLod(depth, texcoord, 0).r;
 
-	float x = calc_coord(x_min.x, x_max.x);
-	float y = calc_coord(y_min.x, y_max.x);
+	vec4 pt_world_coord = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.s-1, 2*pt_depth-1, 1);
 
-	vec4 ndc_curr = vec4(2.0f/width * (gl_Position.x - x) - 1.0f, 2.0f/height * (gl_Position.y - y) - 1.0f, 2 * gl_Position.z - 1.0f, 1.0f);
+	float range_value = length(vec4(eye_source,1) - pt_world_coord);
 
-	//calculate position of point in left view
-	vec4 clip_0 = mvp_left * mvp_current_inv * ndc_curr;
-	vec3 ndc_0 = clip_0.xyz / clip_0.w;
-	vec2 look_up_0 = 1/2 * vec2(ndc_0.x + 1, ndc_0.y + 1);
+	float disparity = length(p_1*vec3(texcoord, 1))/range_value;
 
-	//calculate position of point in right view
-	vec4 clip_1 = mvp_right * mvp_current_inv * ndc_curr;
-	vec3 ndc_1 = clip_1.xyz / clip_1.w;
-	vec2 look_up_1 = 1/2 * vec2(ndc_1.x + 1, ndc_1.y + 1);
+	//original equation but potentially p_2 == p_1 --> cancel each other out
+	//vec3 target = disparity * inverse(p_2) * (eye_source-eye_target) + inverse(p_2) * p_1 * vec3(texcoord, 1);
+	vec3 target = disparity * inverse(p_2) * (eye_source-eye_target) * fac + vec3(texcoord, 1);
 
-	vec4 depth_0 =texture(depth_tex,look_up_0);
-	vec4 depth_1 =texture(depth_tex,look_up_1);
+	float depth = textureLod(depth, vec2(target.x, target.y), 0).r;
+	discard_fs = depth < 1 ? 0 : 1;
+	color_fs = textureLod(color, vec2(target.x, target.y), 0);
 
-	vec4 colour_0 =texture(colour_tex,look_up_0);
-	vec4 colour_1 =texture(colour_tex,look_up_1);
-
-	if (depth_0.x > depth_1.x){
-		colour = colour_0;
-	} else{
-		colour = colour_1;
-	}
-
-	gl_Position = vec4(0,0,0,0);
+	//vec4 position_transformed = get_modelview_projection_matrix() * position;
+	//gl_Position = vec4(target.x, target.y, 2*depth-1, 1);
+	//gl_Position = vec4(position_transformed.xy, 2*depth-1, position_transformed.w);
+	gl_Position = vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*depth-1, 1) + 0.000001*position;
+	//gl_Position = position_transformed;
 }

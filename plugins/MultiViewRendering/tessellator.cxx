@@ -79,6 +79,7 @@ GPUgeometry tessellator::quad (
 	// create quad geometry defined by the given min/max corner and sample counts
 	// - prelude
 	const float i_denom = (float)num_samples0-1, j_denom = (float)num_samples1-1;
+
 	std::vector<vertex> vertices;
 	std::vector<unsigned> indices;
 	GPUgeometry geom; geom.restart_index = (unsigned)-1;
