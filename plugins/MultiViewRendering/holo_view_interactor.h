@@ -20,31 +20,31 @@
 #include "lib_begin.h"
 
 namespace cgv {
-	namespace math {
-		///return a vector containing the component-wise modulo value
-		template <typename T, uint32_t N>
-		const fvec<T, N> mod(const fvec<T, N>& v, const fvec<T, N>& t) {
-			fvec<T, N> c;
-			for (unsigned i = 0; i < N; ++i)
-				c(i) = v(i) % t(i);
-			return c;
-		}
-		template <uint32_t N>
-		const fvec<float, N> mod(const fvec<float, N>& v, const fvec<float, N>& t) {
-			fvec<float, N> c;
-			for (unsigned i = 0; i < N; ++i)
-				c(i) = std::fmod(v(i), t(i));
-			return c;
-		}
-		template <uint32_t N>
-		const fvec<double, N> mod(const fvec<double, N>& v, const fvec<double, N>& t) {
-			fvec<double, N> c;
-			for (unsigned i = 0; i < N; ++i)
-				c(i) = std::fmod(v(i), t(i));
-			return c;
-		}
-	}
+namespace math {
+/// return a vector containing the component-wise modulo value
+template <typename T, uint32_t N> const fvec<T, N> mod(const fvec<T, N>& v, const fvec<T, N>& t)
+{
+	fvec<T, N> c;
+	for (unsigned i = 0; i < N; ++i)
+		c(i) = v(i) % t(i);
+	return c;
 }
+template <uint32_t N> const fvec<float, N> mod(const fvec<float, N>& v, const fvec<float, N>& t)
+{
+	fvec<float, N> c;
+	for (unsigned i = 0; i < N; ++i)
+		c(i) = std::fmod(v(i), t(i));
+	return c;
+}
+template <uint32_t N> const fvec<double, N> mod(const fvec<double, N>& v, const fvec<double, N>& t)
+{
+	fvec<double, N> c;
+	for (unsigned i = 0; i < N; ++i)
+		c(i) = std::fmod(v(i), t(i));
+	return c;
+}
+} // namespace math
+} // namespace cgv
 
 struct holo_display_calibration : public cgv::render::render_types
 {
@@ -69,31 +69,25 @@ struct holo_display_calibration : public cgv::render::render_types
 		vec3 bl_crd_2 = bl_crd_1 / length;
 		return bl_crd_2;
 	}
-	vec3 compute_subpixel_x_coordinates(ivec2 pixel)
-	{
-		return float(pixel.x()) * (x_max-x_min) + x_min;
-	}
-	vec3 compute_subpixel_y_coordinates(ivec2 pixel)
-	{
-		return float(pixel.y()) * (y_max - y_min) + y_min;
-	}
+	vec3 compute_subpixel_x_coordinates(ivec2 pixel) { return float(pixel.x()) * (x_max - x_min) + x_min; }
+	vec3 compute_subpixel_y_coordinates(ivec2 pixel) { return float(pixel.y()) * (y_max - y_min) + y_min; }
 };
 
 /// class that manages a stereoscopic view
-class CGV_API holo_view_interactor : 
-	public cgv::base::node, 
-	public cgv::gui::event_handler, 
-	public cgv::render::multi_pass_drawable,
-	public cgv::gui::provider,
-	public cgv::render::stereo_view
+class CGV_API holo_view_interactor : public cgv::base::node,
+									 public cgv::gui::event_handler,
+									 public cgv::render::multi_pass_drawable,
+									 public cgv::gui::provider,
+									 public cgv::render::stereo_view
 {
-public:
-	typedef cgv::math::fvec<float, 3>      vec3;
-	typedef cgv::math::fvec<double, 3>    dvec3;
+  public:
+	typedef cgv::math::fvec<float, 3> vec3;
+	typedef cgv::math::fvec<double, 3> dvec3;
 	typedef cgv::math::fmat<double, 3, 3> dmat3;
 	typedef cgv::math::fmat<double, 4, 4> dmat4;
 	typedef cgv::media::axis_aligned_box<double, 3> dbox3;
-protected:
+
+  protected:
 	// interaction
 	bool two_d_enabled;
 	bool fix_view_up_dir;
@@ -105,23 +99,29 @@ protected:
 	holo_display_calibration display_calib;
 
 	// rendering
-public:
+  public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
-	MultiplexMode holo_mpx_mode = HM_SINGLE,   // --NOTE-- since no image warping is implemented yet, these to parameters are currently
-	              render_mpx_mode = HM_SINGLE; //          force-synchronized in on_set()
-protected:
+	MultiplexMode
+		  holo_mpx_mode =
+				HM_SINGLE, // --NOTE-- since no image warping is implemented yet, these to parameters are currently
+		  render_mpx_mode = HM_SINGLE; //          force-synchronized in on_set()
+  protected:
 	unsigned view_width = 1638;
 	unsigned view_height = 910;
-	unsigned nr_render_views = 45; // --NOTE-- the baseline approach where the scene is rendered fully only in stereo would set this to 2
+	unsigned nr_render_views =
+		  45; // --NOTE-- the baseline approach where the scene is rendered fully only in stereo would set this to 2
 	unsigned view_index = 22;
-	unsigned nr_holo_views = 45; // --NOTE-- the number of views required for the hologram - currently force-synchronized to nr_render_views in on_set()
+	unsigned nr_holo_views = 45; // --NOTE-- the number of views required for the hologram - currently
+								 // force-synchronized to nr_render_views in on_set()
 	int blit_offset_x = 0, blit_offset_y = 0;
 	bool generate_hologram = true;
 	bool display_write_to_file = false;
-private:
+
+  private:
 	cgv::render::texture display_tex;
 	cgv::render::frame_buffer display_fbo;
-protected:
+
+  protected:
 	// quilt
 	rgb quilt_bg_color = rgb(0.5f, 0.5f, 0.5f);
 	bool quilt_use_offline_texture = true;
@@ -132,7 +132,7 @@ protected:
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
 
-protected:
+  protected:
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
 	cgv::render::texture quilt_render_tex, quilt_holo_tex;
@@ -145,10 +145,10 @@ protected:
 	cgv::render::render_buffer volume_depth_buffer;
 	cgv::render::shader_program volume_prog;
 
-
-public:
+  public:
 	void set_default_values();
-protected:
+
+  protected:
 	/// whether messages should be shown to user in case something fails
 	bool enable_messages;
 	double z_near_derived, z_far_derived;
@@ -156,14 +156,14 @@ protected:
 	bool clip_relative_to_extent;
 	double pan_sensitivity, zoom_sensitivity, rotate_sensitivity;
 
-	template <typename T>
-	void update_vec_member(cgv::math::vec<T>& v) {
-		for (unsigned int i=0; i<v.size(); ++i)
+	template <typename T> void update_vec_member(cgv::math::vec<T>& v)
+	{
+		for (unsigned int i = 0; i < v.size(); ++i)
 			update_member(&v(i));
 	}
-	template <typename T, cgv::type::uint32_type N>
-	void update_vec_member(cgv::math::fvec<T,N>& v) {
-		for (unsigned int i=0; i<N; ++i)
+	template <typename T, cgv::type::uint32_type N> void update_vec_member(cgv::math::fvec<T, N>& v)
+	{
+		for (unsigned int i = 0; i < N; ++i)
 			update_member(&v(i));
 	}
 	///
@@ -186,7 +186,7 @@ protected:
 	bool gamepad_attached;
 	float deadzone;
 	int left_mode, right_mode;
-	cgv::math::fvec<float,2> left_stick, right_stick, trigger;
+	cgv::math::fvec<float, 2> left_stick, right_stick, trigger;
 
 	bool gamepad_emulation;
 	bool emulation_active;
@@ -205,30 +205,34 @@ protected:
 	ivec4 split_viewport(const ivec4 vp, int col_idx, int row_idx) const;
 	//@}
 
-
 	/// surface manager stuff
 	void enable_surface(cgv::render::context& ctx);
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
-public:
+
+  public:
 	///
 	holo_view_interactor(const char* name);
 	/**@name viewport splitting*/
 	//@{
-	/// call this function before a drawing process to support viewport splitting inside the draw call via the activate/deactivate functions
+	/// call this function before a drawing process to support viewport splitting inside the draw call via the
+	/// activate/deactivate functions
 	void enable_viewport_splitting(unsigned nr_cols, unsigned nr_rows);
-	/// check whether viewport splitting is activated and optionally set the number of columns and rows if corresponding pointers are passed
+	/// check whether viewport splitting is activated and optionally set the number of columns and rows if corresponding
+	/// pointers are passed
 	bool is_viewport_splitting_enabled(unsigned* nr_cols_ptr = 0, unsigned* nr_rows_ptr = 0) const;
 	/// disable viewport splitting
 	void disable_viewport_splitting();
-	/// inside the drawing process activate the sub-viewport with the given column and row indices, always terminate an activated viewport with deactivate_split_viewport
+	/// inside the drawing process activate the sub-viewport with the given column and row indices, always terminate an
+	/// activated viewport with deactivate_split_viewport
 	void activate_split_viewport(cgv::render::context& ctx, unsigned col_index, unsigned row_index);
 	/// deactivate the previously split viewport
 	void deactivate_split_viewport(cgv::render::context& ctx);
 	/// make a viewport manage its own view
 	void enable_viewport_individual_view(unsigned col_index, unsigned row_index, bool enable = true);
 	/// check whether viewport manage its own view
-	bool does_viewport_use_individual_view(unsigned col_index, unsigned row_index) const { 
+	bool does_viewport_use_individual_view(unsigned col_index, unsigned row_index) const
+	{
 		unsigned i = get_viewport_index(col_index, row_index);
 		return i >= use_individual_view.size() ? false : use_individual_view[i];
 	}
@@ -236,26 +240,54 @@ public:
 	cgv::render::view& ref_viewport_view(unsigned col_index, unsigned row_index);
 	//@}
 	//! given a mouse location and the pixel extent of the context, return the MPW matrix for unprojection
-	int get_modelview_projection_window_matrices(int x, int y, int width, int height,
-		const dmat4** MPW_pptr,
-		const dmat4** MPW_other_pptr = 0, int* x_other_ptr = 0, int* y_other_ptr = 0,
-		int* vp_col_idx_ptr = 0, int* vp_row_idx_ptr = 0,
-		int* vp_width_ptr = 0, int *vp_height_ptr = 0,
-		int* vp_center_x_ptr = 0, int* vp_center_y_ptr = 0,
-		int* vp_center_x_other_ptr = 0, int* vp_center_y_other_ptr = 0) const;
-	//! given a pixel location x,y return the z-value from the depth buffer, which ranges from 0.0 at z_near to 1.0 at z_far and a point in world coordinates
+	int get_modelview_projection_window_matrices(int x, int y, int width, int height, const dmat4** MPW_pptr,
+												 const dmat4** MPW_other_pptr = 0, int* x_other_ptr = 0,
+												 int* y_other_ptr = 0, int* vp_col_idx_ptr = 0, int* vp_row_idx_ptr = 0,
+												 int* vp_width_ptr = 0, int* vp_height_ptr = 0,
+												 int* vp_center_x_ptr = 0, int* vp_center_y_ptr = 0,
+												 int* vp_center_x_other_ptr = 0, int* vp_center_y_other_ptr = 0) const;
+	//! given a pixel location x,y return the z-value from the depth buffer, which ranges from 0.0 at z_near to 1.0 at
+	//! z_far and a point in world coordinates
 	/*! in case of stereo rendering two z-values exist that can be unprojected to two points in world
-	    coordinates. In this case the possibility with smaller z value is selected. */
+		coordinates. In this case the possibility with smaller z value is selected. */
 	void get_vp_col_and_row_indices(cgv::render::context& ctx, int x, int y, int& vp_col_idx, int& vp_row_idx);
 	double get_z_and_unproject(cgv::render::context& ctx, int x, int y, dvec3& p);
-	void set_focus(const dvec3& foc) { stereo_view::set_focus(foc); update_vec_member(view::focus); }
-	void set_view_up_dir(const dvec3& vud) { stereo_view::set_view_up_dir(vud); update_vec_member(view_up_dir); }
-	void set_view_dir(const dvec3& vd) { stereo_view::set_view_dir(vd); update_vec_member(view_dir); }
-	void set_y_extent_at_focus(double ext) { stereo_view::set_y_extent_at_focus(ext); on_set(&y_extent_at_focus); }
-	void set_y_view_angle(double angle) { stereo_view::set_y_view_angle(angle); on_set(&y_view_angle); }
-	void set_eye_distance(double e) { stereo_view::set_eye_distance(e); on_set(&eye_distance); }
-	void set_parallax_zero_scale(double pzs) { stereo_view::set_parallax_zero_scale(pzs); on_set(&parallax_zero_scale); }
-	/// return the type name 
+	void set_focus(const dvec3& foc)
+	{
+		stereo_view::set_focus(foc);
+		update_vec_member(view::focus);
+	}
+	void set_view_up_dir(const dvec3& vud)
+	{
+		stereo_view::set_view_up_dir(vud);
+		update_vec_member(view_up_dir);
+	}
+	void set_view_dir(const dvec3& vd)
+	{
+		stereo_view::set_view_dir(vd);
+		update_vec_member(view_dir);
+	}
+	void set_y_extent_at_focus(double ext)
+	{
+		stereo_view::set_y_extent_at_focus(ext);
+		on_set(&y_extent_at_focus);
+	}
+	void set_y_view_angle(double angle)
+	{
+		stereo_view::set_y_view_angle(angle);
+		on_set(&y_view_angle);
+	}
+	void set_eye_distance(double e)
+	{
+		stereo_view::set_eye_distance(e);
+		on_set(&eye_distance);
+	}
+	void set_parallax_zero_scale(double pzs)
+	{
+		stereo_view::set_parallax_zero_scale(pzs);
+		on_set(&parallax_zero_scale);
+	}
+	/// return the type name
 	std::string get_type_name() const;
 	/// overload to show the content of this object
 	void stream_stats(std::ostream&);
@@ -267,14 +299,14 @@ public:
 	bool init(cgv::render::context&);
 	/// this method is called in one pass over all drawables before the draw method
 	void init_frame(cgv::render::context&);
-	/// 
+	///
 	void draw(cgv::render::context&);
 	/// this method is called in one pass over all drawables after drawing
 	void finish_frame(cgv::render::context&);
 	/// this method is called in one pass over all drawables after finish frame
 	void after_finish(cgv::render::context&);
 	/// return a shortcut to activate the gui without menu navigation
-	//cgv::gui::shortcut get_shortcut() const;
+	// cgv::gui::shortcut get_shortcut() const;
 	/// return a path in the main menu to select the gui
 	std::string get_menu_path() const;
 	/// you must overload this for gui creation
@@ -283,14 +315,15 @@ public:
 	void set_z_near(double z);
 	void set_z_far(double z);
 	void set_default_view();
-private:
+
+  private:
 	double check_for_click;
-	
+
 	dmat4 MPW, MPW_right;
 	dmat4 V, P;
 
 	float current_e = 0.0f;
-	//int current_vp[4], current_sb[4];
+	// int current_vp[4], current_sb[4];
 
 	bool do_viewport_splitting;
 	unsigned nr_viewport_columns;
@@ -307,6 +340,7 @@ private:
 	int last_x, last_y;
 };
 
-extern CGV_API cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode> get_reflection_traits(const holo_view_interactor::MultiplexMode&);
+extern CGV_API cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode>
+get_reflection_traits(const holo_view_interactor::MultiplexMode&);
 
 #include <cgv/config/lib_end.h>

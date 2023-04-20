@@ -239,7 +239,7 @@ void holo_view_interactor::stream_stats(std::ostream& os)
 {
 	os << "holo_view_interactor:\n\a";
 
-	oprintf(os, "y_view_angle=%.1f�, y_extent=%.1f, inp_z_range:[%.2f,%.2f]", y_view_angle, y_extent_at_focus, z_near,
+	oprintf(os, "y_view_angle=%.1fº, y_extent=%.1f, inp_z_range:[%.2f,%.2f]", y_view_angle, y_extent_at_focus, z_near,
 			z_far);
 	if (scene_extent.is_valid()) {
 		oprintf(os, " adapted to scene: [%.2f,%.2f]\n", z_near_derived, z_far_derived);
@@ -1092,7 +1092,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 }
 
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
-{	
+{
 	if (render_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;

@@ -16,12 +16,12 @@ uniform sampler2D depth;
 uniform mat3 p_2;
 uniform mat3 p_1;
 uniform mat4 inv_mvp_source;
+uniform float w;
+uniform float l;
+uniform float r;
 
 uniform vec3 eye_source;
 uniform vec3 eye_target;
-
-uniform float width;
-uniform float height;
 
 uniform float fac;
 
@@ -33,23 +33,23 @@ out float discard_fs;
 
 void main()
 {  	
-	/*float pt_depth = textureLod(depth, texcoord, 0).r;
+	float pt_depth = textureLod(depth, texcoord, 0).r;
 
 	vec4 pt_world_coord = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.s-1, 2*pt_depth-1, 1);
 
-	float range_value = length(vec4(eye_source,1) - pt_world_coord);*/
-
-	float range_value = 2 * textureLod(depth, texcoord, 0).r - 1;
+	float range_value = length(vec4(eye_source,1) - pt_world_coord);
 
 	float disparity = length(p_1*vec3(texcoord, 1))/range_value;
 
 	//original equation but potentially p_2 == p_1 --> cancel each other out
-	//vec3 target = disparity * inverse(p_2) * (eye_source-eye_target) + inverse(p_2) * p_1 * vec3(texcoord, 1);
-	vec3 target = disparity * inverse(p_2) * (eye_source-eye_target) * fac + vec3(texcoord, 1);
+	//float target_x = disparity * w/(r-l) * (eye_source-eye_target).x * fac + texcoord.x;
+	vec3 target = disparity * inverse(p_2) * (eye_source-eye_target) * fac + inverse(p_2) * p_1 * vec3(texcoord, 1);
 
-	float depth = textureLod(depth, vec2(target.x, target.y), 0).r;
+	float depth = textureLod(depth, vec2(target.x, texcoord.y), 0).r;
 	discard_fs = depth < 1 ? 0 : 1;
-	color_fs = textureLod(color, vec2(target.x, target.y), 0);
+
+	color_fs = textureLod(color, vec2(target.x, texcoord.y), 0);
+	//color_fs = vec4(range_value, range_value, range_value, 1);
 
 	//vec4 position_transformed = get_modelview_projection_matrix() * position;
 	//gl_Position = vec4(target.x, target.y, 2*depth-1, 1);

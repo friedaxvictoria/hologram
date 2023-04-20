@@ -489,7 +489,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
 		//          initial mono depth map test case)
-		test.render_heightmap = true;
+		/* test.render_heightmap = true;
 
 		if (test.shoot_heightmap) {
 			static const vec3 right_local(1, 0, 0);
@@ -695,7 +695,10 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 					color_tex.disable(ctx);
 				}
 			}
-		}
+		}*/
+
+if (show_surface)
+			draw_surface(ctx, false);
 
 		// END: 3D image warping baseline test
 		////
