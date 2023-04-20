@@ -25,4 +25,4 @@ type(fltk_viewer_window):theme=dark
 //type(holo_view_interactor):holo_mpx_mode=quilt
 
 // Whether to output the actual hologram from the lightfield or just display the multiplexed lightfield images
-//type(holo_view_interactor):generate_hologram=false
+type(holo_view_interactor):generate_hologram=false

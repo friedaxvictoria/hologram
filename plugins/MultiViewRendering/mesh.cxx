@@ -697,7 +697,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			}
 		}*/
 
-if (show_surface)
+		if (show_surface)
 			draw_surface(ctx, false);
 
 		// END: 3D image warping baseline test
