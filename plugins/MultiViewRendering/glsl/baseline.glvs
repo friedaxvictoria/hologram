@@ -15,10 +15,15 @@ uniform sampler2D depth;
 
 uniform mat4 inv_proj_source;
 uniform mat4 modelview_source;
-uniform float x_start;
-uniform float y_start;
-uniform float x_divide;
-uniform float y_divide;
+
+uniform uint nr_views     =   45u;
+uniform uint view_width   = 1638u;
+uniform uint view_height  =  910u;
+uniform uint quilt_nr_cols  = 5u;
+uniform uint quilt_nr_rows  = 9u;
+uniform uint quilt_width  = 8192u;
+uniform uint quilt_height = 8192u;
+uniform uint view_index;
 
 in vec4 position;
 in vec2 texcoord;
@@ -31,18 +36,21 @@ out vec4 pos_source_world;
 
 void main()
 {
-	vec2 texcoord_offset = vec2(x_start + texcoord.x/x_divide, y_start + texcoord.y/y_divide);
+	uint quilt_col = view_index % quilt_nr_cols;
+	uint quilt_row = view_index / quilt_nr_rows;
+	vec2 texcoord_offset = vec2((quilt_col + texcoord.x)*float(view_width)/float(quilt_width), (quilt_row + texcoord.y)*float(view_height)/float(quilt_height));
 	color_fs = textureLod(color, texcoord_offset,0);
 
 	float depth = textureLod(depth, texcoord_offset, 0).r;
 	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
 
 	// caluculate the projection direction based off of the pixel coordinates
-	vec4 proj_on_znear = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord_offset.s-1, 2*texcoord_offset.t-1, -1, 1);
-	vec4 proj_on_zfar = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord_offset.s-1, 2*texcoord_offset.t-1, 1, 1);
+	vec4 proj_on_znear = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, -1, 1);
+	vec4 proj_on_zfar = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
 	direction_fs = normalize(proj_on_zfar.xyz - proj_on_znear.xyz);
 	
-	pos_source_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord_offset.s-1, 2*texcoord_offset.t-1, 2*depth-1, 1);
+	//pos_source_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
 	
-	gl_Position = get_projection_matrix() * get_modelview_matrix() * pos_source_world + 0.0000001 * position;
+	//gl_Position = get_projection_matrix() * get_modelview_matrix() * pos_source_world + 0.0000001 * position;
+	gl_Position = get_modelview_projection_matrix()*position;
 }

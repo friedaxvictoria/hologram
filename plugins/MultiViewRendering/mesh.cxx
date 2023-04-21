@@ -525,7 +525,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			if (test.shoot_heightmap || (test.nr_rendered_views_changed && test.render_heightmap)) {
 				test.render_fbo[i].enable(ctx);
 				// make the heightmap quad very slightly visible even where it doesn't contain scene geometry
-				//glClearColor(.03125f, .03125f, .03125f, 1.f);
+				// glClearColor(.03125f, .03125f, .03125f, 1.f);
 
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -537,27 +537,29 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 				mat4 shear, translate;
 				shear.identity();
-				shear(0, 2) = x_of_cam/
-							  view->get_depth_of_focus();
+				shear(0, 2) = x_of_cam / view->get_depth_of_focus();
 
 				translate.identity();
 				translate(0, 3) = x_of_cam;
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
 
-				test.p_1[i] = compute_frustum_model_image_warp(-test.x_ext/2, test.x_ext/2, -test.y_ext/2, test.y_ext, ctx.get_width(), ctx.get_height(), test.znear);
+				// test.p_1[i] = compute_frustum_model_image_warp(-test.x_ext/2, test.x_ext/2, -test.y_ext/2,
+				// test.y_ext, ctx.get_width(), ctx.get_height(), test.znear);
 
 				ctx.push_projection_matrix();
 				ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
 				ctx.push_modelview_matrix();
 				ctx.set_modelview_matrix(test.modelview_source * inv(test.heightmap_trans));
 			}
+		}*/
 
 
 			// END: 3D image warping baseline test
 			////
 
-			if (show_vertices && (test.shoot_heightmap || !test.render_heightmap)) {
+			/* if (show_vertices && (test.shoot_heightmap || !test.render_heightmap))
+			{
 				sphere_renderer& sr = ref_sphere_renderer(ctx);
 				sr.set_render_style(sphere_style);
 				sr.enable_attribute_array_manager(ctx, sphere_aam);

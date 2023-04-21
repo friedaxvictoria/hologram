@@ -16,9 +16,9 @@ void main()
 {
 	vec3 normal = normalize(cross(dFdx(pos_source_world.xyz), dFdy(pos_source_world.xyz)));
 	float ortho_to_proj = abs(dot(direction_fs, normal));
-	if (ortho_to_proj < epsilon && !with_interpolated_holes)
-		discard;
-	if (prune_empty && ((discard_fs > 0 && !with_interpolated_holes) || (discard_fs == 1 && with_interpolated_holes)))
-		discard; // don't render "empty" geometry
+	//if (ortho_to_proj < epsilon && !with_interpolated_holes)
+		//discard;
+	//if (discard_fs > 0)
+		//discard; // don't render "empty" geometry
 	color = color_fs;
 }

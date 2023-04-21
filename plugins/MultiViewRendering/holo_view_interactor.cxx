@@ -19,6 +19,8 @@
 #include <cmath>
 #include <stdio.h>
 
+#include "utilities.h"
+
 using namespace cgv::math;
 using namespace cgv::signal;
 using namespace cgv::gui;
@@ -963,6 +965,18 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!volume_prog.build_program(ctx, "volume_finish.glpr", true))
 		return false;
+	if (!baseline_shader.build_program(ctx, "baseline.glpr", true))
+		return false;
+	if (!holes_shader.build_program(ctx, "holes.glpr", true))
+		return false;
+
+	// (re-)tessellate our heightmap
+	// - get view frustum information
+	const float half_aspect = (float)float(view_width) / (2 * float(view_height));
+	// - tesselate
+	heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+								  float(view_width), float(view_height));
+
 	return true;
 }
 
@@ -1055,18 +1069,21 @@ void holo_view_interactor::init_frame(context& ctx)
 		break;
 	}
 
-	// determine aspect ratio from opengl settings
+		// determine aspect ratio from opengl settings
 	GLint vp[4];
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
 
 	// compute the clipping planes based on the eye and scene extent
 	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
-	if (rpf & RPF_SET_PROJECTION)
+	if (rpf & RPF_SET_PROJECTION) {
 		gl_set_projection_matrix(ctx, current_e, aspect);
+		inv_mat_proj_render[vi] = inv(ctx.get_projection_matrix());
+	}
 
-	if (rpf & RPF_SET_MODELVIEW)
+	if (rpf & RPF_SET_MODELVIEW) {
 		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+	}
 
 	if (current_e == GLSU_RIGHT) {
 		MPW_right = ctx.get_modelview_projection_window_matrix();
@@ -1078,6 +1095,23 @@ void holo_view_interactor::init_frame(context& ctx)
 		if (do_viewport_splitting)
 			MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
 	}
+
+	static const vec3 right_local(1, 0, 0);
+	const mat4 invMV = inv(ctx.get_modelview_matrix());
+	vec3 cam_dir = get_view_dir();
+	const vec3 cam_pos = get_eye(), cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
+			   cam_up = get_view_up_dir(); // --CAREFUL-- get_view_up_dir is not 100% reliable,
+										   // consider inferring from modelview matrix!
+	// - find out where the scene ends along world-space camera viewing direction
+	// auto [bmin, bmax] = project_box_onto_dir(M_bbox, cam_dir);
+	// - find out how large the quad needs to be to fill the whole frustum at that point
+	const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = (float)z_far_derived - cam_depth_world,
+				y_ext = (float)get_y_extent_at_depth(heightmap_depth_eye, false), x_ext = y_ext * aspect;
+	// - position the heightmap just behind the scene, facing the camera at the moment of capture:
+	//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) * Scale(y_ext)
+	heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
+							vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});
+	modelview_source = ctx.get_modelview_matrix() * heightmap_trans;
 }
 
 /// this method is called in one pass over all drawables after finish frame
@@ -1099,11 +1133,15 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		if (!quilt_fbo.is_created() || quilt_fbo.get_width() != quilt_width || quilt_fbo.get_height() != quilt_height) {
 			quilt_fbo.destruct(ctx);
 			quilt_render_tex.destruct(ctx);
+			quilt_depth_tex.destruct(ctx);
 			quilt_depth_buffer.destruct(ctx);
 			quilt_render_tex.create(ctx, TT_2D, quilt_width, quilt_height);
+			quilt_depth_tex.set_component_format("[D]");
+			quilt_depth_tex.create(ctx, TT_2D, quilt_width, quilt_height);
 			quilt_depth_buffer.create(ctx, quilt_width, quilt_height);
 			quilt_fbo.create(ctx, quilt_width, quilt_height);
 			quilt_fbo.attach(ctx, quilt_render_tex, 0);
+			quilt_fbo.attach(ctx, quilt_depth_tex);
 			quilt_fbo.attach(ctx, quilt_depth_buffer);
 		}
 		quilt_fbo.enable(ctx, 0);
@@ -1115,11 +1153,15 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		{
 			volume_fbo.destruct(ctx);
 			volume_render_tex.destruct(ctx);
+			volume_depth_tex.destruct(ctx);
 			volume_depth_buffer.destruct(ctx);
 			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
+			volume_depth_tex.set_component_format("[D]");
+			volume_depth_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
 			volume_depth_buffer.create(ctx, view_width, view_height);
 			volume_fbo.create(ctx, view_width, view_height);
 			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
+			volume_fbo.attach(ctx, volume_depth_tex, 0, 0, 0);
 			volume_fbo.attach(ctx, volume_depth_buffer);
 		}
 		volume_fbo.enable(ctx, 0);
@@ -1159,6 +1201,105 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	/// lightfield (called quilt_holo_tex or volume_holo_tex, depending on the multiplexing strategy selected for image
 	/// warping in the GUI), and this texture will be the input for the holo shader below.
 	///
+	/// 
+
+	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
+
+	switch (holo_mpx_mode) {
+	case HM_SINGLE:
+		current_e = (2.0f * view_index) / (nr_holo_views - 1) - 1.0f;
+		last_do_viewport_splitting = do_viewport_splitting;
+		last_nr_viewport_columns = nr_viewport_columns;
+		last_nr_viewport_rows = nr_viewport_rows;
+		break;
+	case HM_QUILT:
+	case HM_VOLUME:
+		if (!warp_fbo.is_created() || warp_fbo.get_width() != quilt_width || warp_fbo.get_height() != quilt_height) {
+			quilt_holo_tex.destruct(ctx);
+			warp_fbo.destruct(ctx);
+			warp_fbo.create(ctx, quilt_width, quilt_height);
+			quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
+			warp_fbo.attach(ctx, quilt_holo_tex);
+		}
+
+		warp_fbo.enable(ctx);
+		warp_fbo.push_viewport(ctx);
+
+		last_do_viewport_splitting = do_viewport_splitting;
+		last_nr_viewport_columns = nr_viewport_columns;
+		last_nr_viewport_rows = nr_viewport_rows;
+
+		if (render_mpx_mode == HM_QUILT) {
+			glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			vi = 0;
+			for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
+				for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
+
+					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+					if (holo_mpx_mode == HM_QUILT) {
+						ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
+						glViewport(vp[0], vp[1], vp[2], vp[3]);
+						glScissor(vp[0], vp[1], vp[2], vp[3]);
+						glEnable(GL_SCISSOR_TEST);
+					}
+
+					GLint vp[4];
+					glGetIntegerv(GL_VIEWPORT, vp);
+					double aspect = (double)vp[2] / vp[3];
+					gl_set_projection_matrix(ctx, current_e, aspect);
+					gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+					for (unsigned int i = 0; i < 1; i++)
+					{
+						quilt_render_tex.enable(ctx, 0);
+						baseline_shader.set_uniform(ctx, "color", 0);
+						quilt_depth_tex.enable(ctx, 1);
+						baseline_shader.set_uniform(ctx, "depth", 1);
+
+						baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
+						baseline_shader.set_uniform(ctx, "modelview_source", modelview_source);
+						baseline_shader.set_uniform(ctx, "prune_empty", true);
+						baseline_shader.set_uniform(ctx, "with_interpolated_holes", false);
+						baseline_shader.set_uniform(ctx, "epsilon", (float)0.02);
+						baseline_shader.set_uniform(ctx, "view_width", view_width);
+						baseline_shader.set_uniform(ctx, "view_height", view_height);
+						baseline_shader.set_uniform(ctx, "quilt_nr_cols", quilt_nr_cols);
+						baseline_shader.set_uniform(ctx, "quilt_nr_rows", quilt_nr_rows);
+						baseline_shader.set_uniform(ctx, "quilt_width", quilt_width);
+						baseline_shader.set_uniform(ctx, "quilt_height", quilt_height);
+						baseline_shader.set_uniform(ctx, "view_index", i);
+
+						baseline_shader.enable(ctx);
+						glDisable(GL_CULL_FACE);
+						ctx.push_modelview_matrix();
+						ctx.mul_modelview_matrix(heightmap_trans);
+						heightmap.draw(ctx);
+						ctx.pop_modelview_matrix();
+						glEnable(GL_CULL_FACE);
+						baseline_shader.disable(ctx);
+						quilt_depth_tex.disable(ctx);
+						quilt_render_tex.disable(ctx);
+					}
+					if (++vi == nr_holo_views)
+						break;
+				}
+				if (vi == nr_holo_views)
+					break;
+			}
+		}
+		/* else
+		{
+			for (vi = 0; vi < nr_holo_views; ++vi) {
+				volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
+				glClear(GL_DEPTH_BUFFER_BIT);
+				perform_render_pass(ctx, vi, RP_STEREO);
+			}*/
+		warp_fbo.pop_viewport(ctx);
+		warp_fbo.disable(ctx);
+	}
+
 	if (generate_hologram) {
 		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width ||
 			display_fbo.get_height() != display_calib.height)
@@ -1182,11 +1323,11 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			prog.set_uniform(ctx, "quilt_width", quilt_width);
 			prog.set_uniform(ctx, "quilt_height", quilt_height);
 			prog.set_uniform(ctx, "quilt_interpolate", quilt_interpolate);
-			quilt_render_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
+			quilt_holo_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
-			volume_render_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
+			volume_holo_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
 			prog.set_uniform(ctx, "volume_tex", 0);
 		}
 		prog.set_uniform(ctx, "width", display_calib.width);
@@ -1217,9 +1358,10 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 					  float(blit_offset_y + ctx.get_height()));
 		display_fbo.blit_to(ctx, src_rect, cgv::render::BTB_COLOR_BIT, false);
 	}
+	
 	else {
 		if (holo_mpx_mode == HM_QUILT)
-			quilt_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
+			warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		else {
 			volume_fbo.attach(ctx, volume_render_tex, view_index, 0,
 							  0); // --NOTE-- change to volume_holo_tex once ready
@@ -1385,13 +1527,13 @@ void holo_view_interactor::on_set(void* m)
 	if (m == &nr_render_views) {
 		if (find_control(view_index))
 			find_control(view_index)->set("max", nr_render_views - 1);
-		nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
+		//nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&nr_holo_views);	 //          force-synchronize those two parameters
 	}
 	else if (m == &nr_holo_views) {
 		if (find_control(view_index))
 			find_control(view_index)->set("max", nr_holo_views - 1);
-		nr_render_views = nr_holo_views; // --NOTE-- since no image-warping is implemented yet, we
+		//nr_render_views = nr_holo_views; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&nr_render_views); //          force-synchronize those two parameters
 	}
 	else if (m == &render_mpx_mode) {

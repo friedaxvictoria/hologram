@@ -18,6 +18,7 @@
 #endif
 
 #include "lib_begin.h"
+#include "tessellator.h"
 
 namespace cgv {
 namespace math {
@@ -109,7 +110,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned view_width = 1638;
 	unsigned view_height = 910;
 	unsigned nr_render_views =
-		  45; // --NOTE-- the baseline approach where the scene is rendered fully only in stereo would set this to 2
+		  3; // --NOTE-- the baseline approach where the scene is rendered fully only in stereo would set this to 2
 	unsigned view_index = 22;
 	unsigned nr_holo_views = 45; // --NOTE-- the number of views required for the hologram - currently
 								 // force-synchronized to nr_render_views in on_set()
@@ -135,15 +136,22 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   protected:
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
-	cgv::render::texture quilt_render_tex, quilt_holo_tex;
+	cgv::render::texture quilt_render_tex, quilt_holo_tex, quilt_depth_tex;
 	cgv::render::frame_buffer quilt_fbo;
 	cgv::render::render_buffer quilt_depth_buffer;
 	cgv::render::shader_program quilt_prog;
 
-	cgv::render::texture volume_render_tex, volume_holo_tex;
+	cgv::render::texture volume_render_tex, volume_holo_tex, volume_depth_tex;
 	cgv::render::frame_buffer volume_fbo;
 	cgv::render::render_buffer volume_depth_buffer;
 	cgv::render::shader_program volume_prog;
+
+	cgv::render::shader_program baseline_shader, holes_shader;
+	GPUgeometry heightmap;
+
+	cgv::render::frame_buffer warp_fbo;
+
+	mat4 inv_mat_proj_render[45], modelview_source, heightmap_trans;
 
   public:
 	void set_default_values();
