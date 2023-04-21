@@ -180,7 +180,7 @@ void holo_view_interactor::timer_event(double t, double dt)
 
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
-	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]")
+	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_depth_tex("[D]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -216,6 +216,8 @@ holo_view_interactor::holo_view_interactor(const char* name)
 
 	quilt_render_tex.set_mag_filter(cgv::render::TF_LINEAR);
 	volume_render_tex.set_mag_filter(cgv::render::TF_LINEAR);
+	quilt_depth_tex.set_mag_filter(cgv::render::TF_LINEAR);
+	volume_depth_tex.set_mag_filter(cgv::render::TF_LINEAR);
 }
 /// return the type name
 std::string holo_view_interactor::get_type_name() const { return "holo_view_interactor"; }
@@ -1136,7 +1138,6 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			quilt_depth_tex.destruct(ctx);
 			quilt_depth_buffer.destruct(ctx);
 			quilt_render_tex.create(ctx, TT_2D, quilt_width, quilt_height);
-			quilt_depth_tex.set_component_format("[D]");
 			quilt_depth_tex.create(ctx, TT_2D, quilt_width, quilt_height);
 			quilt_depth_buffer.create(ctx, quilt_width, quilt_height);
 			quilt_fbo.create(ctx, quilt_width, quilt_height);
@@ -1156,7 +1157,6 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			volume_depth_tex.destruct(ctx);
 			volume_depth_buffer.destruct(ctx);
 			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
-			volume_depth_tex.set_component_format("[D]");
 			volume_depth_tex.create(ctx, TT_3D, view_width, view_height, nr_render_views);
 			volume_depth_buffer.create(ctx, view_width, view_height);
 			volume_fbo.create(ctx, view_width, view_height);
@@ -1202,8 +1202,6 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	/// warping in the GUI), and this texture will be the input for the holo shader below.
 	///
 	/// 
-
-	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
 
 	switch (holo_mpx_mode) {
 	case HM_SINGLE:
@@ -1254,9 +1252,9 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 					for (unsigned int i = 0; i < 1; i++)
 					{
 						quilt_render_tex.enable(ctx, 0);
-						baseline_shader.set_uniform(ctx, "color", 0);
+						baseline_shader.set_uniform(ctx, "color", 0, true);
 						quilt_depth_tex.enable(ctx, 1);
-						baseline_shader.set_uniform(ctx, "depth", 1);
+						baseline_shader.set_uniform(ctx, "depth", 1, true);
 
 						baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
 						baseline_shader.set_uniform(ctx, "modelview_source", modelview_source);

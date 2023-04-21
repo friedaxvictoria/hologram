@@ -10,8 +10,8 @@ mat3 get_normal_matrix();
 mat3 get_inverse_normal_matrix();
 /***** end interface of view.glsl ***********************************/
 
-uniform sampler2D color;
-uniform sampler2D depth;
+layout(location = 0) uniform sampler2D color;
+layout(location = 1) uniform sampler2D depth;
 
 uniform mat4 inv_proj_source;
 uniform mat4 modelview_source;
@@ -43,6 +43,8 @@ void main()
 
 	float depth = textureLod(depth, texcoord_offset, 0).r;
 	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
+
+	color_fs = vec4(depth, depth, depth, 1);
 
 	// caluculate the projection direction based off of the pixel coordinates
 	vec4 proj_on_znear = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, -1, 1);
