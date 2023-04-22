@@ -5,6 +5,7 @@
 #include <cgv/render/stereo_view.h>
 #include <cgv/render/texture.h>
 #include <cgv/render/shader_program.h>
+#include <cgv/render/managed_frame_buffer.h>
 #include <cgv/render/frame_buffer.h>
 #include <cgv/gui/event_handler.h>
 #include <cgv/gui/key_event.h>
@@ -102,10 +103,10 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// rendering
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
-	MultiplexMode
-		  holo_mpx_mode =
-				HM_SINGLE, // --NOTE-- since no image warping is implemented yet, these to parameters are currently
-		  render_mpx_mode = HM_SINGLE; //          force-synchronized in on_set()
+	MultiplexMode holo_mpx_mode = HM_SINGLE;
+	enum MultiViewMode {MVM_SINGLE, MVM_MULTIVIEW};
+	MultiViewMode render_mpx_mode = MVM_SINGLE;
+
   protected:
 	unsigned view_width = 1638;
 	unsigned view_height = 910;
@@ -132,26 +133,24 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned quilt_nr_rows = 9;
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
+	float heightmap_oversampling = 2.f; // oversampling factor of the heightmap (to be able to resolve finer details)
 
   protected:
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
-	cgv::render::texture quilt_render_tex, quilt_holo_tex, quilt_depth_tex;
-	cgv::render::frame_buffer quilt_fbo;
-	cgv::render::render_buffer quilt_depth_buffer;
+	cgv::render::texture quilt_holo_tex;
 	cgv::render::shader_program quilt_prog;
 
-	cgv::render::texture volume_render_tex, volume_holo_tex, volume_depth_tex;
-	cgv::render::frame_buffer volume_fbo;
-	cgv::render::render_buffer volume_depth_buffer;
+	cgv::render::texture volume_holo_tex;
 	cgv::render::shader_program volume_prog;
 
-	cgv::render::shader_program baseline_shader, holes_shader;
-	GPUgeometry heightmap;
+	cgv::render::shader_program baseline_shader, baseline_vol_shader, holes_shader;
+	GPUgeometry heightmap, heightmap_vol;
 
-	cgv::render::frame_buffer warp_fbo;
+	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
+	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
 
-	mat4 inv_mat_proj_render[45], modelview_source, heightmap_trans;
+	mat4 inv_mat_proj_render[3], modelview_source, heightmap_trans;
 
   public:
 	void set_default_values();
