@@ -18,7 +18,7 @@ void main()
 	float ortho_to_proj = abs(dot(direction_fs, normal));
 	if (ortho_to_proj < epsilon)
 		discard;
-	if (discard_fs > 0)
+	if (prune_empty && (discard_fs > 0))
 		discard; // don't render "empty" geometry
 	color = color_fs;
 }

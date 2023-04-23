@@ -1080,6 +1080,7 @@ void holo_view_interactor::init_frame(context& ctx)
 
 	if (rpf & RPF_SET_MODELVIEW) {
 		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+		modelview_source[vi] = ctx.get_modelview_matrix();
 	}
 
 	if (current_e == GLSU_RIGHT) {
@@ -1185,141 +1186,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	///
 	/// 
 
-	/* switch (holo_mpx_mode)
-	{
-	case HM_SINGLE:
-	case HM_QUILT:
-	case HM_VOLUME:
-
-		if (holo_mpx_mode == HM_QUILT) {
-			quilt_width = ctx.get_width() * quilt_nr_cols;
-			quilt_height = ctx.get_height() * quilt_nr_rows;
-			if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
-				quilt_warp_fbo.get_height() != quilt_height)
-			{
-				quilt_holo_tex.destruct(ctx);
-				quilt_warp_fbo.destruct(ctx);
-				quilt_warp_fbo.create(ctx, quilt_width, quilt_height);
-				quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
-				quilt_warp_fbo.attach(ctx, quilt_holo_tex);
-			}
-
-			quilt_warp_fbo.enable(ctx);
-			quilt_warp_fbo.push_viewport(ctx);
-
-			glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			vi = 0;
-			for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
-				for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
-
-					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-					ivec4 vp(quilt_col * ctx.get_width(), quilt_row * ctx.get_height(), ctx.get_width(), ctx.get_height());
-					glViewport(vp[0], vp[1], vp[2], vp[3]);
-					glScissor(vp[0], vp[1], vp[2], vp[3]);
-					glEnable(GL_SCISSOR_TEST);
-
-					double aspect = (double)ctx.get_width() / ctx.get_height();
-					gl_set_projection_matrix(ctx, current_e, aspect);
-					gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-
-					for (unsigned int i = 0; i < 1; i++)
-					{
-						texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
-								&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
-						// render pass for baseline approach
-						color_tex.enable(ctx, 0);
-						baseline_shader.set_uniform(ctx, "color", 0);
-						depth_tex.enable(ctx, 1);
-						baseline_shader.set_uniform(ctx, "depth", 1);
-
-						baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
-						baseline_shader.set_uniform(ctx, "modelview_source", modelview_source);
-						baseline_shader.set_uniform(ctx, "prune_empty", true);
-						baseline_shader.set_uniform(ctx, "with_interpolated_holes", false);
-						baseline_shader.set_uniform(ctx, "epsilon", (float)0.02);
-
-						baseline_shader.enable(ctx);
-						glDisable(GL_CULL_FACE);
-						ctx.push_modelview_matrix();
-						ctx.mul_modelview_matrix(heightmap_trans);
-						std::cout << "in holo: " << ctx.get_modelview_matrix() << std::endl;
-
-						heightmap.draw(ctx);
-						ctx.pop_modelview_matrix();
-						glEnable(GL_CULL_FACE);
-						baseline_shader.disable(ctx);
-						color_tex.disable(ctx);
-						depth_tex.disable(ctx);
-					}
-					if (++vi == nr_holo_views)
-						break;
-				}
-				if (vi == nr_holo_views)
-					break;
-			}
-			quilt_warp_fbo.pop_viewport(ctx);
-			quilt_warp_fbo.disable(ctx);
-			glScissor(0, 0, ctx.get_width(), ctx.get_height());
-			glDisable(GL_SCISSOR_TEST);							
-		}
-		else {
-			if (!volume_warp_fbo.is_created() || volume_warp_fbo.get_width() != ctx.get_width() ||
-				volume_warp_fbo.get_height() != ctx.get_height())
-			{
-				volume_warp_fbo.destruct(ctx);
-				volume_holo_tex.destruct(ctx);
-				volume_warp_fbo.create(ctx, ctx.get_width(), ctx.get_height());
-				volume_holo_tex.create(ctx, TT_3D, ctx.get_width(), ctx.get_height(), nr_holo_views);
-				volume_warp_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
-			}
-
-			volume_warp_fbo.enable(ctx);
-			volume_warp_fbo.push_viewport(ctx);
-
-			for (vi = 0; vi < nr_holo_views; ++vi) {
-				glClear(GL_DEPTH_BUFFER_BIT);
-
-				double aspect = (double)ctx.get_width() / ctx.get_height();
-				gl_set_projection_matrix(ctx, current_e, aspect);
-				gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-
-				for (unsigned int i = 0; i < 1; i++) {
-					volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
-
-						texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
-							&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
-					// render pass for baseline approach
-					color_tex.enable(ctx, 0);
-					baseline_shader.set_uniform(ctx, "color", 0);
-					depth_tex.enable(ctx, 1);
-					baseline_shader.set_uniform(ctx, "depth", 1);
-
-					baseline_vol_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
-					baseline_vol_shader.set_uniform(ctx, "modelview_source", modelview_source);
-					baseline_vol_shader.set_uniform(ctx, "prune_empty", true);
-					baseline_vol_shader.set_uniform(ctx, "with_interpolated_holes", false);
-					baseline_vol_shader.set_uniform(ctx, "epsilon", (float)0.02);
-
-					baseline_vol_shader.enable(ctx);
-					glDisable(GL_CULL_FACE);
-					ctx.push_modelview_matrix();
-					ctx.mul_modelview_matrix(heightmap_trans);
-					heightmap_vol.draw(ctx);
-					ctx.pop_modelview_matrix();
-					glEnable(GL_CULL_FACE);
-					baseline_vol_shader.disable(ctx);
-					color_tex.disable(ctx);
-					depth_tex.disable(ctx);
-				}
-			}
-			volume_warp_fbo.pop_viewport(ctx);
-			volume_warp_fbo.disable(ctx);
-		}
-	}*/
-
-	if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != ctx.get_width() ||
+	/* if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != ctx.get_width() ||
 		quilt_warp_fbo.get_height() != ctx.get_height())
 	{
 		quilt_holo_tex.destruct(ctx);
@@ -1334,10 +1201,143 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 
 	double aspect = (double)ctx.get_width() / ctx.get_height();
 	gl_set_projection_matrix(ctx, (2.0f * view_index) / (nr_holo_views - 1) - 1.0f, aspect);
-	gl_set_modelview_matrix(ctx, (2.0f * view_index) / (nr_holo_views - 1) - 1.0f, aspect, *this);
+	gl_set_modelview_matrix(ctx, (2.0f * view_index) / (nr_holo_views - 1) - 1.0f, aspect, *this);*/
+
+switch (holo_mpx_mode)
+{
+case HM_SINGLE:
+case HM_QUILT:
+case HM_VOLUME:
+
+	if (holo_mpx_mode == HM_QUILT) {
+		quilt_width = ctx.get_width() * quilt_nr_cols;
+		quilt_height = ctx.get_height() * quilt_nr_rows;
+		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
+			quilt_warp_fbo.get_height() != quilt_height)
+		{
+			quilt_holo_tex.destruct(ctx);
+			quilt_warp_fbo.destruct(ctx);
+			quilt_warp_fbo.create(ctx, quilt_width, quilt_height);
+			quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
+			quilt_warp_fbo.attach(ctx, quilt_holo_tex);
+		}
+
+		quilt_warp_fbo.enable(ctx);
+		quilt_warp_fbo.push_viewport(ctx);
+
+		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		vi = 0;
+		for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
+			for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
+
+				current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+				ivec4 vp(quilt_col * ctx.get_width(), quilt_row * ctx.get_height(), ctx.get_width(), ctx.get_height());
+				glViewport(vp[0], vp[1], vp[2], vp[3]);
+				glScissor(vp[0], vp[1], vp[2], vp[3]);
+				glEnable(GL_SCISSOR_TEST);
+
+				double aspect = (double)ctx.get_width() / ctx.get_height();
+				gl_set_projection_matrix(ctx, current_e, aspect);
+				gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+				for (unsigned int i = 0; i < nr_render_views; i++) {
+					texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
+							&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+					// render pass for baseline approach
+					color_tex.enable(ctx, 0);
+					baseline_shader.set_uniform(ctx, "color", 0);
+					depth_tex.enable(ctx, 1);
+					baseline_shader.set_uniform(ctx, "depth", 1);
+
+					baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
+					baseline_shader.set_uniform(ctx, "modelview_source", modelview_source[i]);
+					baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
+					baseline_shader.set_uniform(ctx, "epsilon", epsilon);
+
+					baseline_shader.enable(ctx);
+					glDisable(GL_CULL_FACE);
+					ctx.push_modelview_matrix();
+					heightmap.draw(ctx);
+					ctx.pop_modelview_matrix();
+					glEnable(GL_CULL_FACE);
+					baseline_shader.disable(ctx);
+					color_tex.disable(ctx);
+					depth_tex.disable(ctx);
+				}
+
+				if (++vi == nr_holo_views)
+					break;
+			}
+			if (vi == nr_holo_views)
+				break;
+		}
+		quilt_warp_fbo.pop_viewport(ctx);
+		quilt_warp_fbo.disable(ctx);
+		glScissor(0, 0, ctx.get_width(), ctx.get_height());
+		glDisable(GL_SCISSOR_TEST);
+	}
+	else {
+		if (!volume_warp_fbo.is_created() || volume_warp_fbo.get_width() != ctx.get_width() ||
+			volume_warp_fbo.get_height() != ctx.get_height())
+		{
+			volume_warp_fbo.destruct(ctx);
+			volume_holo_tex.destruct(ctx);
+			volume_warp_fbo.create(ctx, ctx.get_width(), ctx.get_height());
+			volume_holo_tex.create(ctx, TT_3D, ctx.get_width(), ctx.get_height(), nr_holo_views);
+			volume_warp_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
+		}
+
+		volume_warp_fbo.enable(ctx);
+		volume_warp_fbo.push_viewport(ctx);
+
+		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		for (vi = 0; vi < nr_holo_views; ++vi) {
+			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
+			glClear(GL_DEPTH_BUFFER_BIT);
+
+			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+
+			double aspect = (double)ctx.get_width() / ctx.get_height();
+			gl_set_projection_matrix(ctx, current_e, aspect);
+			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+			for (unsigned int i = 0; i < nr_render_views; i++) {
+				texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
+						&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+				// render pass for baseline approach
+				color_tex.enable(ctx, 0);
+				baseline_shader.set_uniform(ctx, "color", 0);
+				depth_tex.enable(ctx, 1);
+				baseline_shader.set_uniform(ctx, "depth", 1);
+
+				baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
+				baseline_shader.set_uniform(ctx, "modelview_source", modelview_source[i]);
+				baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
+				baseline_shader.set_uniform(ctx, "epsilon", epsilon);
+
+				baseline_shader.enable(ctx);
+				glDisable(GL_CULL_FACE);
+				ctx.push_modelview_matrix();
+				heightmap.draw(ctx);
+				ctx.pop_modelview_matrix();
+				glEnable(GL_CULL_FACE);
+				baseline_shader.disable(ctx);
+				color_tex.disable(ctx);
+				depth_tex.disable(ctx);
+			}
+		}
+		volume_warp_fbo.pop_viewport(ctx);
+		volume_warp_fbo.disable(ctx);
+	}
+}
 
 
-	static const vec3 right_local(1, 0, 0);
+	/* static const vec3 right_local(1, 0, 0);
 	const mat4 invMV = inv(ctx.get_modelview_matrix());
 	vec3 cam_dir = get_view_dir();
 	const vec3 cam_pos = get_eye(), cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
@@ -1353,11 +1353,10 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) *
 	//   Scale(y_ext)
 	heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
-							vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});
+							vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});*/
 
-	modelview_source = ctx.get_modelview_matrix();
 
-	glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+	/* glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
@@ -1371,9 +1370,8 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		baseline_shader.set_uniform(ctx, "depth", 1);
 
 		baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
-		baseline_shader.set_uniform(ctx, "modelview_source", modelview_source);
-		baseline_shader.set_uniform(ctx, "prune_empty", true);
-		baseline_shader.set_uniform(ctx, "with_interpolated_holes", false);
+		baseline_shader.set_uniform(ctx, "modelview_source", modelview_source[i]);
+		baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
 		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
 
 		baseline_shader.enable(ctx);
@@ -1388,7 +1386,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 
 	quilt_warp_fbo.disable(ctx);
-	quilt_warp_fbo.pop_viewport(ctx);
+	quilt_warp_fbo.pop_viewport(ctx);*/
 
 	if (generate_hologram) {
 		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width ||
@@ -1450,7 +1448,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 	
 	else {
-		if (true) {
+		if (holo_mpx_mode == HM_QUILT) {
 			quilt_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
 		else {
@@ -1574,6 +1572,9 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
+			add_member_control(
+				  this, "prune empty areas", prune_heightmap, "check",
+				  "tooltip='discard heightmap fragments which dont represent valid geometry';shortcut='p'");
 			add_member_control(this, "Generate Hologram", generate_hologram, "toggle");
 			add_member_control(this, "Write To File", display_write_to_file, "toggle");
 			end_tree_node(render_mpx_mode);
