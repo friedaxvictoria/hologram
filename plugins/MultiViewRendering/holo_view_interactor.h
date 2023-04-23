@@ -147,7 +147,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::texture volume_holo_tex;
 	cgv::render::shader_program volume_prog;
 
-	cgv::render::shader_program baseline_shader, baseline_vol_shader, holes_shader;
+	cgv::render::shader_program baseline_shader, holes_shader;
 	GPUgeometry heightmap, heightmap_vol;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;

@@ -964,8 +964,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!baseline_shader.build_program(ctx, "baseline.glpr", true))
 		return false;
-	if (!baseline_vol_shader.build_program(ctx, "baseline_vol.glpr", true))
-		return false;
 	if (!holes_shader.build_program(ctx, "holes.glpr", true))
 		return false;
 
@@ -996,8 +994,6 @@ void holo_view_interactor::init_frame(context& ctx)
 		// - tesselate
 		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
 									  float(ctx.get_width()), float(ctx.get_height()));
-		heightmap_vol = tessellator::quad(ctx, baseline_vol_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
-										  float(ctx.get_width()), float(ctx.get_height()));
 	}
 
 	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
@@ -1063,7 +1059,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			initiate_terminal_render_pass(nr_render_views - 1);
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
-			current_e = (2.0f * vi) / (nr_render_views - 1) - 1.0f;
+			current_e  = nr_render_views == 1 ? 0.0 :  (2.0f * vi) / (nr_render_views - 1) - 1.0f;
 		}
 		break;
 	}
@@ -1071,30 +1067,29 @@ void holo_view_interactor::init_frame(context& ctx)
 	double aspect = (double)ctx.get_width() / ctx.get_height();
 
 	// compute the clipping planes based on the eye and scene extent
-	if (vi < nr_render_views) {
-	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
-	if (rpf & RPF_SET_PROJECTION) {
-		gl_set_projection_matrix(ctx, current_e, aspect);
-		inv_mat_proj_render[vi] = inv(ctx.get_projection_matrix());
-	}
+	if ((vi < nr_render_views) || render_mpx_mode == MVM_SINGLE) {
+		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
+		if (rpf & RPF_SET_PROJECTION) {
+			gl_set_projection_matrix(ctx, current_e, aspect);
+			inv_mat_proj_render[vi] = inv(ctx.get_projection_matrix());
+		}
 
-	if (rpf & RPF_SET_MODELVIEW) {
-		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-		modelview_source[vi] = ctx.get_modelview_matrix();
-	}
+		if (rpf & RPF_SET_MODELVIEW) {
+			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+			modelview_source[vi] = ctx.get_modelview_matrix();
+		}
 
-	if (current_e == GLSU_RIGHT) {
-		MPW_right = ctx.get_modelview_projection_window_matrix();
-		if (do_viewport_splitting)
-			MPWs_right = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW_right);
+		if (current_e == GLSU_RIGHT) {
+			MPW_right = ctx.get_modelview_projection_window_matrix();
+			if (do_viewport_splitting)
+				MPWs_right = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW_right);
+		}
+		else {
+			MPW = ctx.get_modelview_projection_window_matrix();
+			if (do_viewport_splitting)
+				MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
+		}
 	}
-	else {
-		MPW = ctx.get_modelview_projection_window_matrix();
-		if (do_viewport_splitting)
-			MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
-	}
-}
-
 }
 
 /// this method is called in one pass over all drawables after finish frame
@@ -1293,11 +1288,9 @@ case HM_VOLUME:
 		volume_warp_fbo.enable(ctx);
 		volume_warp_fbo.push_viewport(ctx);
 
-		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 		for (vi = 0; vi < nr_holo_views; ++vi) {
 			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
-			glClear(GL_DEPTH_BUFFER_BIT);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 
@@ -1335,26 +1328,6 @@ case HM_VOLUME:
 		volume_warp_fbo.disable(ctx);
 	}
 }
-
-
-	/* static const vec3 right_local(1, 0, 0);
-	const mat4 invMV = inv(ctx.get_modelview_matrix());
-	vec3 cam_dir = get_view_dir();
-	const vec3 cam_pos = get_eye(), cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
-			   cam_up = get_view_up_dir(); // --CAREFUL-- get_view_up_dir is not 100% reliable,
-										   // consider inferring from modelview matrix!
-	// - find out where the scene ends along world-space camera viewing direction
-	// auto [bmin, bmax] = project_box_onto_dir(M_bbox, cam_dir);
-	// - find out how large the quad needs to be to fill the whole frustum at that point
-	const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = (float)z_far_derived - cam_depth_world,
-				y_ext = (float)get_y_extent_at_depth(heightmap_depth_eye, false),
-				x_ext = y_ext * ctx.get_width() / ctx.get_height();
-	// - position the heightmap just behind the scene, facing the camera at the moment of capture:
-	//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) *
-	//   Scale(y_ext)
-	heightmap_trans = mat4({vec4(y_ext * cam_right, 0), vec4(y_ext * cam_up, 0), vec4(y_ext * cam_dir, 0),
-							vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)});*/
-
 
 	/* glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1566,6 +1539,8 @@ void holo_view_interactor::create_gui()
 							   "min=1;max=3;ticks=true");
 			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
 							   "min=2;max=100;ticks=true");
+			add_member_control(this, "Oversample Heightmap", heightmap_oversampling, "value_slider",
+							   "min=0.5;max=4;step=0.5");
 			add_member_control(
 				  this, "Epsilon", epsilon, "value_slider",
 				  "min=0;max=0.1;step=0.00001;ticks=true");
@@ -1625,19 +1600,21 @@ void holo_view_interactor::on_set(void* m)
 			find_control(view_index)->set("max", nr_render_views - 1);
 		//nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
 		//update_member(&nr_holo_views);	 //          force-synchronize those two parameters
-	}
-	else if (m == &nr_holo_views) {
+	}*/
+	if (m == &nr_holo_views)
+	{
 		if (find_control(view_index))
 			find_control(view_index)->set("max", nr_holo_views - 1);
 		//nr_render_views = nr_holo_views; // --NOTE-- since no image-warping is implemented yet, we
 		//update_member(&nr_render_views); //          force-synchronize those two parameters
 	}
-	 else if (m == &render_mpx_mode)
+	 else if (m == &render_mpx_mode && render_mpx_mode == MVM_SINGLE)
 	{
-		holo_mpx_mode = render_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
+		holo_mpx_mode = HM_SINGLE; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&holo_mpx_mode);	 //          force-synchronize those two parameters
 	}
-	else if (m == &holo_mpx_mode) {
+	 /* else if (m == &holo_mpx_mode)
+	 {
 		render_mpx_mode = holo_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&render_mpx_mode); //          force-synchronize those two parameters
 	}*/
