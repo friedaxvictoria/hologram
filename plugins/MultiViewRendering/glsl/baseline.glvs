@@ -8,7 +8,7 @@ mat4 get_inverse_modelview_matrix();
 mat4 get_inverse_modelview_projection_matrix();
 mat3 get_normal_matrix();
 mat3 get_inverse_normal_matrix();
-/***** end interface of view.glsl ***********************************/
+/***** end interface of view.glsl ************************************/
 
 uniform sampler2D color;
 uniform sampler2D depth;
@@ -32,15 +32,13 @@ void main()
 	float depth = textureLod(depth, texcoord, 0).r;
 	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
 
-	//color_fs = vec4(depth, depth, depth, 1);
-
 	// caluculate the projection direction based off of the pixel coordinates
-	vec4 proj_on_znear = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, -1, 1);
-	vec4 proj_on_zfar = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
-	direction_fs = normalize(proj_on_zfar.xyz - proj_on_znear.xyz);
+	vec4 proj_one = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 0, 1);
+	vec4 proj_two = inverse(modelview_source) * inv_proj_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
+	direction_fs = normalize((proj_one - proj_two).xyz);
 	
-	//pos_source_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
+	pos_source_world = inverse(modelview_source)*inv_proj_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
 	
-	//gl_Position = get_projection_matrix() * get_modelview_matrix() * pos_source_world + 0.0000001 * position;
-	gl_Position = get_modelview_projection_matrix()*position;
+	gl_Position = get_projection_matrix() * get_modelview_matrix() * pos_source_world + 0.0000001 * position;
+	//gl_Position = get_modelview_projection_matrix()*position;
 }

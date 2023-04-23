@@ -138,6 +138,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   protected:
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
+	float epsilon = 0.02;
 	cgv::render::texture quilt_holo_tex;
 	cgv::render::shader_program quilt_prog;
 

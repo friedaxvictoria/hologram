@@ -543,6 +543,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				translate(0, 3) = x_of_cam;
 
 				test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
+				std::cout << "proj in mesh: " << i << ", "<< test.inv_mat_proj_render[i] << std::endl;
 
 				// test.p_1[i] = compute_frustum_model_image_warp(-test.x_ext/2, test.x_ext/2, -test.y_ext/2,
 				// test.y_ext, ctx.get_width(), ctx.get_height(), test.znear);
@@ -552,13 +553,13 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 				ctx.push_modelview_matrix();
 				ctx.set_modelview_matrix(test.modelview_source * inv(test.heightmap_trans));
 			}
-		}*/
+		
 
 
 			// END: 3D image warping baseline test
 			////
 
-			/* if (show_vertices && (test.shoot_heightmap || !test.render_heightmap))
+			 if (show_vertices && (test.shoot_heightmap || !test.render_heightmap))
 			{
 				sphere_renderer& sr = ref_sphere_renderer(ctx);
 				sr.set_render_style(sphere_style);
@@ -697,7 +698,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 					color_tex.disable(ctx);
 				}
 			}
-		}*/
+		} */
 
 		if (show_surface)
 			draw_surface(ctx, false);
