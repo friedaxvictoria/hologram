@@ -104,8 +104,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_MULTIVIEW};
-	MultiViewMode render_mpx_mode = MVM_SINGLE;
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_MULTIVIEW};
+	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
 	unsigned view_width = 1638;
@@ -125,7 +125,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
   protected:
 	// quilt
-	rgb quilt_bg_color = rgb(0.5f, 0.5f, 0.5f);
+	rgb quilt_bg_color = rgb(0.0f, 0.0f, 0.0f);
 	bool quilt_use_offline_texture = true;
 	unsigned quilt_width = 8192;
 	unsigned quilt_height = 8192;
@@ -141,11 +141,15 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	float epsilon = 0.02;
 	bool prune_heightmap = true; 
 
-	cgv::render::texture quilt_holo_tex;
+	cgv::render::frame_buffer quilt_fbo;
+	cgv::render::texture quilt_holo_tex, quilt_render_tex;
 	cgv::render::shader_program quilt_prog;
+	cgv::render::render_buffer quilt_depth_buffer;
 
-	cgv::render::texture volume_holo_tex;
+	cgv::render::frame_buffer volume_fbo;
+	cgv::render::texture volume_holo_tex, volume_render_tex;
 	cgv::render::shader_program volume_prog;
+	cgv::render::render_buffer volume_depth_buffer;
 
 	cgv::render::shader_program baseline_shader, holes_shader;
 	GPUgeometry heightmap, heightmap_vol;
@@ -219,6 +223,9 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void enable_surface(cgv::render::context& ctx);
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
+	void draw_baseline(cgv::render::context& ctx);
+	void compute_holo_views(cgv::render::context& ctx);
+	void enable_warp_fb(cgv::render::context& ctx);
 
   public:
 	///

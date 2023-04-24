@@ -109,7 +109,7 @@ protected:
 public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE,   // --NOTE-- since no image warping is implemented yet, these to parameters are currently
-	              render_mpx_mode = HM_SINGLE; //          force-synchronized in on_set()
+	              multiview_mpx_mode = HM_SINGLE; //          force-synchronized in on_set()
 protected:
 	unsigned view_width = 1638;
 	unsigned view_height = 910;
