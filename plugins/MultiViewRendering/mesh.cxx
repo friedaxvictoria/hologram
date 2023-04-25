@@ -122,7 +122,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	cgv::render::stereo_view* view = nullptr;
 
 	float eye_distance;
-	bool stereo_translate_in_model_view = false;
 
 	vec3 cam_dir;
 
@@ -700,8 +699,28 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			}
 		} */
 
+		if (show_vertices) {
+			sphere_renderer& sr = ref_sphere_renderer(ctx);
+			sr.set_render_style(sphere_style);
+			sr.enable_attribute_array_manager(ctx, sphere_aam);
+			sr.render(ctx, 0, M.get_nr_positions());
+			sr.disable_attribute_array_manager(ctx, sphere_aam);
+		}
+		if (show_wireframe) {
+			cone_renderer& cr = ref_cone_renderer(ctx);
+			cr.set_render_style(cone_style);
+			if (cr.enable(ctx)) {
+				mesh_info.draw_wireframe(ctx);
+				cr.disable(ctx);
+			}
+		}
 		if (show_surface)
-			draw_surface(ctx, false);
+			draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
+									  // re-enable correct handling of transparent mesh parts
+
+		// draw the mesh bounding box if we're not currently capturing the heightmap
+		if (show_bbox)
+			M_bbox_rd.render(ctx, ref_box_wire_renderer(ctx), box_wire_render_style());
 
 		// END: 3D image warping baseline test
 		////
@@ -721,8 +740,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	/// methods
 	void finish_frame(context& ctx)
 	{
-		/*if (show_surface)
-			draw_surface(ctx, false);*/ // --NOTE-- uncomment once done testing the image warp to re-enable correct handling of transparent mesh parts
+		if (show_surface)
+			draw_surface(ctx, false); // --NOTE-- uncomment once done testing the image warp to re-enable correct handling of transparent mesh parts
 	}
 
 	/// reflects all our class fields that we want to be settable via config file
@@ -835,8 +854,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		add_decorator("", "separator");
 		add_decorator("Stereo Viewing", "heading", "level=2");
-		add_member_control(this, "Stereo Translate in Model View", stereo_translate_in_model_view, "check");
-
 
 		add_decorator("", "separator");
 		add_decorator("Baseline 3D Image Warp", "heading", "level=2");

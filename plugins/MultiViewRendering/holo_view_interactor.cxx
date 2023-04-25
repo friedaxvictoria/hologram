@@ -180,7 +180,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
-	: node(name)
+	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
+	  volume_warp_depth_buffer("[D]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -1153,10 +1154,10 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 
 		// (re-)tessellate our heightmap
 		// - get view frustum information
-		const float half_aspect = (float)float(ctx.get_width()) / (2 * float(ctx.get_height()));
+		const auto res = render_fbo[1].get_size();
+		const float half_aspect = (float)res.x() / (2 * res.y());
 		// - tesselate
-		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
-									  float(ctx.get_width()), float(ctx.get_height()));
+		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(), res.y());
 	}
 	
 }
@@ -1263,9 +1264,12 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		{
 			quilt_holo_tex.destruct(ctx);
 			quilt_warp_fbo.destruct(ctx);
+			quilt_warp_depth_buffer.destruct(ctx);
 			quilt_warp_fbo.create(ctx, quilt_width, quilt_height);
+			quilt_warp_depth_buffer.create(ctx, quilt_width, quilt_height);
 			quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
 			quilt_warp_fbo.attach(ctx, quilt_holo_tex);
+			quilt_warp_fbo.attach(ctx, quilt_warp_depth_buffer);
 		}
 
 		quilt_warp_fbo.enable(ctx);
@@ -1302,9 +1306,12 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		{
 			volume_warp_fbo.destruct(ctx);
 			volume_holo_tex.destruct(ctx);
+			volume_warp_depth_buffer.destruct(ctx);
 			volume_warp_fbo.create(ctx, ctx.get_width(), ctx.get_height());
+			volume_warp_depth_buffer.create(ctx, ctx.get_width(), ctx.get_height());
 			volume_holo_tex.create(ctx, TT_3D, ctx.get_width(), ctx.get_height(), nr_holo_views);
 			volume_warp_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
+			volume_warp_fbo.attach(ctx, volume_warp_depth_buffer);
 		}
 
 		volume_warp_fbo.enable(ctx);

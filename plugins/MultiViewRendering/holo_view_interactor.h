@@ -139,7 +139,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
 	float epsilon = 0.02;
-	bool prune_heightmap = true; 
+	bool prune_heightmap = true, show_holes = true; 
 
 	cgv::render::frame_buffer quilt_fbo;
 	cgv::render::texture quilt_holo_tex, quilt_render_tex;
@@ -156,6 +156,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
+	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
 	mat4 inv_mat_proj_render[3], modelview_source[3], heightmap_trans;
 
@@ -226,6 +227,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void draw_baseline(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
+	void draw_holes(cgv::render::context& ctx);
 
   public:
 	///
