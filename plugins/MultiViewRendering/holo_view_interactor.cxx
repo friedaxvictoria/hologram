@@ -1277,9 +1277,9 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 						  vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
 
 		color_tex.enable(ctx, 0);
-		warping_shader.set_uniform(ctx, "color", 0);
+		warping_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
-		warping_shader.set_uniform(ctx, "depth", 1);
+		warping_shader.set_uniform(ctx, "depth_tex", 1);
 
 		/* warping_shader.set_uniform(
 			  ctx, "p_1",
@@ -1295,12 +1295,15 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 																	y_extent_at_focus/2,
 																	render_fbo[0].get_size()[0],
 																	render_fbo[0].get_size()[1], z_near_derived));*/
-		warping_shader.set_uniform(ctx, "inv_mvp_source", (mat4)(inv(modelview_source[i]) * inv_mat_proj_render[i]));
+		warping_shader.set_uniform(ctx, "mv_source", modelview_source[i]);
+		warping_shader.set_uniform(ctx, "inv_p_source", inv_mat_proj_render[i]);
 		warping_shader.set_uniform(ctx, "eye_source", w_clip(eye_source[i]));
 		warping_shader.set_uniform(ctx, "eye_target", w_clip(eye_target));
-		warping_shader.set_uniform(ctx, "plane_normal", (vec3)get_view_dir());
+		warping_shader.set_uniform(ctx, "plane_normal",
+								   w_clip(inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(0, 0, 1, 0)));
 		warping_shader.set_uniform(ctx, "point_on_plane", w_clip(inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, -1, 1)));
 		warping_shader.set_uniform(ctx, "screen_width", (float)ctx.get_width()*heightmap_oversampling);
+		warping_shader.set_uniform(ctx, "w", (float)w);
 
 		float pt_depth =0.2;
 		vec4 pt_world_coord = inv(modelview_source[i]) * inv_mat_proj_render[i] *
@@ -1311,28 +1314,28 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		vec3 eye_to_point = eye_source_clip - pt_world_coord_clip;
 		float range_value = length(eye_to_point);
 
-		vec4 point_on_plane = inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, -1, 1);
+		vec4 point_on_plane = inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, 1, 1);
 		vec3 point_on_plane_clip = w_clip(point_on_plane);
 
 		vec3 plane_normal_clip = get_view_dir();
 		float intersection_param =
 			  dot((point_on_plane_clip - eye_source_clip), plane_normal_clip) / (dot(eye_to_point, plane_normal_clip));
 
-		vec3 intersection_point = eye_source_clip + intersection_param * eye_to_point;
+		vec3 intersection = eye_source_clip + intersection_param * eye_to_point;
 
-		float length_point_to_plane = length(pt_world_coord_clip - intersection_point);
+		float length_point_to_plane = length(pt_world_coord_clip - intersection);
 
 
 		float eye_distance = (eye_target - eye_source[i])[0];
 
 		float x_offset = eye_distance / range_value * length_point_to_plane;
 
-		vec4 x_offset_trans =
-			  modelview_source[i] * inv(inv_mat_proj_render[i]) * vec4(x_offset, 0, point_on_plane_clip[2], 1);
-		float x_offset_clip = x_offset_trans[0] / x_offset_trans[3];
-		float x_offset_window = (0.5 * (x_offset_clip + 1)) / ctx.get_width();
+		vec4 new_pos = inv(inv_mat_proj_render[i]) * modelview_source[i] *
+							vec4(pt_world_coord_clip[0] + x_offset, pt_world_coord_clip[1], pt_world_coord_clip[2], 1);
+		float clipped = w_clip(new_pos)[0];
+		float tex = 0.5*(clipped+1);
 
-		vec2 new_texcoord = vec2(0.6 + x_offset_window, 0.6);
+		vec2 new_texcoord = vec2(tex, 0.6);
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
