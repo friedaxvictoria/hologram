@@ -1,6 +1,7 @@
 #version 330 core
 
 in vec2 texcoord_fs;
+in mat4 mvp;
 
 uniform sampler2D color_tex;
 uniform sampler2D depth_tex;

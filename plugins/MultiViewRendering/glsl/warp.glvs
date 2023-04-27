@@ -13,10 +13,13 @@ mat3 get_inverse_normal_matrix();
 in vec2 texcoord;
 
 out vec2 texcoord_fs;
+out mat4 mvp;
 
 void main()
 {  	
 	texcoord_fs = texcoord;
+
+	mvp = get_modelview_projection_matrix();
 
 	gl_Position = vec4(2*texcoord.s-1, 2*texcoord.t-1, 0, 1);
 }

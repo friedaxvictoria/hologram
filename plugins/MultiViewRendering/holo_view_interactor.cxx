@@ -1096,7 +1096,9 @@ void holo_view_interactor::init_frame(context& ctx)
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 			if (multiview_mpx_mode != MVM_BASIC) {
 				modelview_source[vi] = ctx.get_modelview_matrix();
-				eye_source[vi] = inv(ctx.get_modelview_matrix()) * vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
+				eye_source[vi] = inv(ctx.get_modelview_matrix()) *
+								 inv_mat_proj_render[vi] * vec4(
+									   0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
 			}
 		}
 
@@ -1273,8 +1275,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
 
 		vec4 eye_target =
-			  inv(modelview_source[i]) *
-						  vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
+			  inv(modelview_source[i]) * inv_mat_proj_render[i] *  vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
 
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
@@ -1314,7 +1315,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		vec3 eye_to_point = eye_source_clip - pt_world_coord_clip;
 		float range_value = length(eye_to_point);
 
-		vec4 point_on_plane = inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, 1, 1);
+		vec4 point_on_plane = inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, -1, 1);
 		vec3 point_on_plane_clip = w_clip(point_on_plane);
 
 		vec3 plane_normal_clip = get_view_dir();
