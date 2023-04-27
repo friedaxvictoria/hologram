@@ -104,7 +104,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_MULTIVIEW};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -133,7 +133,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned quilt_nr_rows = 9;
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
-	float heightmap_oversampling = 2.f; // oversampling factor of the heightmap (to be able to resolve finer details)
+	float heightmap_oversampling = 1.f; // oversampling factor of the heightmap (to be able to resolve finer details)
+	float w = 100.0;
 
   protected:
 	// internal parameters used during multipass rendering
@@ -151,14 +152,15 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, holes_shader;
-	GPUgeometry heightmap, heightmap_vol;
+	cgv::render::shader_program baseline_shader, holes_shader, warping_shader;
+	GPUgeometry heightmap, heightmap_warp;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
-	mat4 inv_mat_proj_render[3], modelview_source[3], heightmap_trans;
+	mat4 inv_mat_proj_render[3], modelview_source[3];
+	vec4 eye_source[3];
 
   public:
 	void set_default_values();
@@ -225,9 +227,12 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
 	void draw_baseline(cgv::render::context& ctx);
+	void draw_image_warp(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
 	void draw_holes(cgv::render::context& ctx);
+
+	mat3 compute_frustum_model_image_warp(float r, float l, float b, float t, float w, float h, float n);
 
   public:
 	///

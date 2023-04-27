@@ -46,8 +46,7 @@ struct CGV_API GPUgeometry
 	void draw(cgv::render::context& ctx);
 };
 
-/// static class providing methods to create ready-to-render geometry for simple shapes. For now, all
-/// geometry defines positions and a 2D texture coordinates for the vertices.
+/// static class providing methods to create ready-to-render geometry for simple shapes.
 class CGV_API tessellator
 {
   public:
@@ -55,10 +54,24 @@ class CGV_API tessellator
 	typedef cgv::render::render_types::vec3 vec3;
 	typedef cgv::render::render_types::vec4 vec4;
 
+	/// attribute flags
+	enum vertex_attribs {
+		VA_POSITION = 1,
+		VA_NORMAL = 2,
+		VA_POS_NORMAL = VA_POSITION | VA_NORMAL,
+		VA_TEXCOORD = 4,
+		VA_POS_TEXCOORD = VA_POSITION | VA_TEXCOORD,
+		VA_NORMAL_TEXCOORD = VA_NORMAL | VA_TEXCOORD,
+		VA_POS_NORMAL_TEXCOORD = VA_POSITION | VA_NORMAL | VA_TEXCOORD
+	};
+
 	/// tessellates a quad as a grid of num_samples0 � num_samples1 vertices connected in a triangle
 	/// strip, and uploads the resulting geometry to the GPU associated with the given context, binding
 	/// the vertex attributes to the "position" and "texcoord" inputs of the given shader program.
 	/// dimension '0' refers to the larger extend of the quad, while '1' refers to the smaller one.
+	/// If not all attributes should be generated, the desired ones can be selected via attribs.
+	/// Input attribute names in the shader must be "position", "normal" and/or "texcoord" respectively.
 	static GPUgeometry quad(cgv::render::context& ctx, cgv::render::shader_program& shader, const vec3& min_corner,
-							const vec3& max_corner, unsigned num_samples0, unsigned num_samples1);
+							const vec3& max_corner, unsigned num_samples0, unsigned num_samples1,
+							vertex_attribs attribs = VA_POS_NORMAL_TEXCOORD);
 };

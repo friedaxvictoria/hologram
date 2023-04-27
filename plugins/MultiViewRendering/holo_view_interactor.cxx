@@ -664,9 +664,9 @@ bool holo_view_interactor::handle(event& e)
 					return true;
 				}
 				break;
-			case 'M':
+			case 'B':
 				if (ke.get_modifiers() == cgv::gui::EM_SHIFT + cgv::gui::EM_CTRL) {
-					multiview_mpx_mode = MVM_MULTIVIEW;
+					multiview_mpx_mode = MVM_BASELINE;
 					on_set(&multiview_mpx_mode);
 					return true;
 				}
@@ -965,6 +965,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!baseline_shader.build_program(ctx, "baseline.glpr", true))
 		return false;
+	if (!warping_shader.build_program(ctx, "warp.glpr", true))
+		return false;
 	if (!holes_shader.build_program(ctx, "holes.glpr", true))
 		return false;
 
@@ -1026,7 +1028,8 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 		}
 		break;
-	case MVM_MULTIVIEW:
+	case MVM_BASELINE:
+	case MVM_WARPING:
 		/////////////////////////////////////////////
 		/// --NOTE--
 		/// In quilt or volume mode, we want to spawn an additional render pass over all drawables for every
@@ -1081,7 +1084,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	double aspect = (double)ctx.get_width() / ctx.get_height();
 
 	// compute the clipping planes based on the eye and scene extent
-	if ((vi < nr_render_views) || multiview_mpx_mode != MVM_MULTIVIEW) {
+	if ((vi < nr_render_views) || (multiview_mpx_mode != MVM_BASELINE&&multiview_mpx_mode != MVM_WARPING)) {
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
@@ -1091,8 +1094,10 @@ void holo_view_interactor::init_frame(context& ctx)
 
 		if (rpf & RPF_SET_MODELVIEW) {
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-			if (multiview_mpx_mode != MVM_BASIC)
+			if (multiview_mpx_mode != MVM_BASIC) {
 				modelview_source[vi] = ctx.get_modelview_matrix();
+				eye_source[vi] = inv(ctx.get_modelview_matrix()) * vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
+			}
 		}
 
 		if (current_e == GLSU_RIGHT) {
@@ -1157,7 +1162,9 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 		const auto res = render_fbo[1].get_size();
 		const float half_aspect = (float)res.x() / (2 * res.y());
 		// - tesselate
-		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(), res.y());
+		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(), res.y(), tessellator::VA_TEXCOORD);
+		heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(),
+									  res.y(), tessellator::VA_TEXCOORD);
 	}
 	
 }
@@ -1244,11 +1251,94 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx) {
 
 		baseline_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
-		ctx.push_modelview_matrix();
 		heightmap.draw(ctx);
-		ctx.pop_modelview_matrix();
 		glEnable(GL_CULL_FACE);
 		baseline_shader.disable(ctx);
+		color_tex.disable(ctx);
+		depth_tex.disable(ctx);
+	}
+}
+
+// Iterate once over all rendered views to generate one holo view with the image warping approach
+void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
+{
+	current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+
+	double aspect = (double)ctx.get_width() / ctx.get_height();
+	gl_set_projection_matrix(ctx, current_e, aspect);
+	gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+	for (unsigned int i = 0; i < nr_render_views; i++) {
+		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
+				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+		vec4 eye_target =
+			  inv(modelview_source[i]) *
+						  vec4(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0, 1);
+
+		color_tex.enable(ctx, 0);
+		warping_shader.set_uniform(ctx, "color", 0);
+		depth_tex.enable(ctx, 1);
+		warping_shader.set_uniform(ctx, "depth", 1);
+
+		/* warping_shader.set_uniform(
+			  ctx, "p_1",
+			  compute_frustum_model_image_warp(y_extent_at_focus * aspect / 2, -y_extent_at_focus * aspect / 2,
+											   -y_extent_at_focus / 2,
+																	y_extent_at_focus/2,
+																	render_fbo[0].get_size()[0],
+																	render_fbo[0].get_size()[1], z_near_derived));
+		warping_shader.set_uniform(
+			  ctx, "p_2",
+			  compute_frustum_model_image_warp(y_extent_at_focus * aspect / 2, -y_extent_at_focus * aspect / 2,
+																	-y_extent_at_focus / 2,
+																	y_extent_at_focus/2,
+																	render_fbo[0].get_size()[0],
+																	render_fbo[0].get_size()[1], z_near_derived));*/
+		warping_shader.set_uniform(ctx, "inv_mvp_source", (mat4)(inv(modelview_source[i]) * inv_mat_proj_render[i]));
+		warping_shader.set_uniform(ctx, "eye_source", w_clip(eye_source[i]));
+		warping_shader.set_uniform(ctx, "eye_target", w_clip(eye_target));
+		warping_shader.set_uniform(ctx, "plane_normal", (vec3)get_view_dir());
+		warping_shader.set_uniform(ctx, "point_on_plane", w_clip(inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, -1, 1)));
+		warping_shader.set_uniform(ctx, "screen_width", (float)ctx.get_width()*heightmap_oversampling);
+
+		float pt_depth =0.2;
+		vec4 pt_world_coord = inv(modelview_source[i]) * inv_mat_proj_render[i] *
+							  vec4(2 *0.6 - 1, 2 *0.6 - 1, 2 * pt_depth - 1, 1);
+		vec3 pt_world_coord_clip = w_clip(pt_world_coord);
+
+		vec3 eye_source_clip = vec3(eye_source[i][0],eye_source[i][1],eye_source[i][2]);
+		vec3 eye_to_point = eye_source_clip - pt_world_coord_clip;
+		float range_value = length(eye_to_point);
+
+		vec4 point_on_plane = inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(-1, -1, -1, 1);
+		vec3 point_on_plane_clip = w_clip(point_on_plane);
+
+		vec3 plane_normal_clip = get_view_dir();
+		float intersection_param =
+			  dot((point_on_plane_clip - eye_source_clip), plane_normal_clip) / (dot(eye_to_point, plane_normal_clip));
+
+		vec3 intersection_point = eye_source_clip + intersection_param * eye_to_point;
+
+		float length_point_to_plane = length(pt_world_coord_clip - intersection_point);
+
+
+		float eye_distance = (eye_target - eye_source[i])[0];
+
+		float x_offset = eye_distance / range_value * length_point_to_plane;
+
+		vec4 x_offset_trans =
+			  modelview_source[i] * inv(inv_mat_proj_render[i]) * vec4(x_offset, 0, point_on_plane_clip[2], 1);
+		float x_offset_clip = x_offset_trans[0] / x_offset_trans[3];
+		float x_offset_window = (0.5 * (x_offset_clip + 1)) / ctx.get_width();
+
+		vec2 new_texcoord = vec2(0.6 + x_offset_window, 0.6);
+
+		warping_shader.enable(ctx);
+		glDisable(GL_CULL_FACE);
+		heightmap_warp.draw(ctx);
+		glEnable(GL_CULL_FACE);
+		warping_shader.disable(ctx);
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
@@ -1287,7 +1377,10 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				glScissor(vp[0], vp[1], vp[2], vp[3]);
 				glEnable(GL_SCISSOR_TEST);
 
-				draw_baseline(ctx);
+				if (multiview_mpx_mode == MVM_BASELINE)
+					draw_baseline(ctx);
+				else
+					draw_image_warp(ctx);
 
 				if (++vi == nr_holo_views)
 					break;
@@ -1321,7 +1414,10 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			draw_baseline(ctx);
+			if (multiview_mpx_mode == MVM_BASELINE)
+				draw_baseline(ctx);
+			else
+				draw_image_warp(ctx);
 		}
 		volume_warp_fbo.pop_viewport(ctx);
 		volume_warp_fbo.disable(ctx);
@@ -1367,11 +1463,17 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			prog.set_uniform(ctx, "quilt_width", quilt_width);
 			prog.set_uniform(ctx, "quilt_height", quilt_height);
 			prog.set_uniform(ctx, "quilt_interpolate", quilt_interpolate);
-			quilt_holo_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
+			if (multiview_mpx_mode == MVM_BASIC)
+				quilt_render_tex.enable(ctx, 0);
+			else
+				quilt_holo_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
-			volume_holo_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
+			if (multiview_mpx_mode == MVM_BASIC)
+				volume_render_tex.enable(ctx, 0);
+			else
+				volume_holo_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
 			prog.set_uniform(ctx, "volume_tex", 0);
 		}
 		prog.set_uniform(ctx, "width", display_calib.width);
@@ -1423,11 +1525,23 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 
 		
-	if (quilt_write_to_file && multiview_mpx_mode == MVM_MULTIVIEW) {
+	if (quilt_write_to_file && multiview_mpx_mode != MVM_BASIC) {
 		quilt_holo_tex.write_to_file(ctx, "quilt.png");
 		quilt_write_to_file = false;
 		on_set(&quilt_write_to_file);
 	}
+}
+
+mat3 holo_view_interactor::compute_frustum_model_image_warp(float r, float l, float b, float t, float w, float h, float n)
+{
+	mat3 p;
+	p.zeros();
+	p(0, 0) = (r - l) / w;
+	p(0, 2) = l;
+	p(1, 1) = (b - t) / h;
+	p(1, 2) = r;
+	p(2, 2) = n;
+	return p;
 }
 
 ///
@@ -1528,7 +1642,7 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, multi view'");
+							   "enums='single view, basic view, baseline, warping'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
@@ -1537,6 +1651,8 @@ void holo_view_interactor::create_gui()
 							   "min=1;max=3;ticks=true");
 			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
 							   "min=2;max=100;ticks=true");
+			add_member_control(this, "w", w, "value_slider",
+							   "min=2;max=1000;ticks=true");
 			add_member_control(this, "Oversample Heightmap", heightmap_oversampling, "value_slider",
 							   "min=0.5;max=4;step=0.5");
 			add_member_control(
