@@ -12,11 +12,11 @@ uniform mat4 mv_source;
 uniform mat4 inv_p_source;
 uniform float screen_width;
 
-uniform vec3 eye_source;
-uniform vec3 eye_target;
+uniform vec4 eye_source;
+uniform vec4 eye_target;
 
-uniform vec3 plane_normal;
-uniform vec3 point_on_plane;
+uniform vec4 plane_normal;
+uniform vec4 point_on_plane;
 
 uniform float w;
 
@@ -51,25 +51,21 @@ void main()
 
 	float pt_depth = textureLod(depth_tex, texcoord_fs, 0).r;
 
-	vec4 pt_world_coord = inverse(mv_source) * inv_p_source * vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1);
-	vec3 pt_world_coord_clip = pt_world_coord.xyz/pt_world_coord.w;
+	vec4 pt_clip_coord = vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1);
 
-	vec3 eye_to_point = eye_source - pt_world_coord_clip;
+	vec4 eye_to_point = eye_source - pt_clip_coord;
 	float range_value = length(eye_to_point);
 
 	float intersection_param = dot((point_on_plane-eye_source),plane_normal) / (dot(eye_to_point, plane_normal));
-	vec3 intersection = eye_source + intersection_param * eye_to_point;
+	vec4 intersection = eye_source + intersection_param * eye_to_point;
 
-	float length_pt_plane = length(pt_world_coord_clip - intersection);
+	float length_pt_plane = length(pt_clip_coord - intersection);
 
 	float eye_distance = (eye_target-eye_source).x;
 
 	float x_offset = eye_distance/range_value*length_pt_plane;
-	vec4 new_pos_clip = inverse(inv_p_source) * mv_source * vec4(pt_world_coord_clip[0] + x_offset, pt_world_coord_clip[1], pt_world_coord_clip[2], 1);
-	float new_pos_ndc = new_pos_clip.x/new_pos_clip.w;
-	float new_pos_window = (0.5*(new_pos_ndc+1));
 
-	vec2 new_texcoord = vec2(new_pos_window, texcoord_fs.t);
+	vec2 new_texcoord = vec2(texcoord_fs.s+x_offset, texcoord_fs.t);
 
 	float new_depth = textureLod(depth_tex, new_texcoord, 0).r;
 
