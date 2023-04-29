@@ -1,7 +1,6 @@
 #version 330 core
 
 uniform bool prune_empty;
-uniform bool with_interpolated_holes;
 uniform float epsilon;
 
 in vec4 color_fs;

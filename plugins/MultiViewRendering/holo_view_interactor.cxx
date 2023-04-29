@@ -1,4 +1,6 @@
 #include "holo_view_interactor.h"
+#include <cgv/gui/application.h>
+#include <cgv/base/group.h>
 #include <cgv/math/geom.h>
 #include <cgv/math/ftransform.h>
 #include <cgv/gui/dialog.h>
@@ -27,6 +29,7 @@ using namespace cgv::gui;
 using namespace cgv::utils;
 using namespace cgv::render;
 using namespace cgv::render::gl;
+using namespace cgv::base;
 
 #define SMP_ENUMS "bitmap,pixels,arrow"
 #define HOLO_ENUMS "single,quilt,volume"
@@ -36,6 +39,7 @@ get_reflection_traits(const holo_view_interactor::MultiplexMode&)
 {
 	return cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode>("single,quilt,volume");
 }
+
 
 void holo_view_interactor::set_default_values()
 {
@@ -959,6 +963,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]");
 	}
 
+	mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
+
 	if (!quilt_prog.build_program(ctx, "quilt_finish.glpr", true))
 		return false;
 	if (!volume_prog.build_program(ctx, "volume_finish.glpr", true))
@@ -1070,6 +1076,7 @@ void holo_view_interactor::init_frame(context& ctx)
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 				perform_render_pass(ctx, vi, RP_STEREO);
+
 				vi++;
 			}
 			// change to nr_render_views-1 later
@@ -1229,14 +1236,20 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 	glViewport(0, 0, ctx.get_width(), ctx.get_height());
 }
 
+void holo_view_interactor::draw_holes(cgv::render::context& ctx) {
+	holes_shader.enable(ctx);
+	glDisable(GL_DEPTH_TEST);
+
+	mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
+
+	mesh_drawable->draw(ctx);
+
+	glEnable(GL_DEPTH_TEST);
+	holes_shader.disable(ctx);
+}
+
 // Iterate once over all rendered views to generate one holo view with the baseline approach
 void holo_view_interactor::draw_baseline(cgv::render::context& ctx) {
-	current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-
-	double aspect = (double)ctx.get_width() / ctx.get_height();
-	gl_set_projection_matrix(ctx, current_e, aspect);
-	gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
@@ -1264,11 +1277,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx) {
 // Iterate once over all rendered views to generate one holo view with the image warping approach
 void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 {
-	current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-
 	double aspect = (double)ctx.get_width() / ctx.get_height();
-	gl_set_projection_matrix(ctx, current_e, aspect);
-	gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
@@ -1342,6 +1351,8 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 
 void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 {
+	double aspect = (double)ctx.get_width() / ctx.get_height();
+
 	if (holo_mpx_mode == HM_QUILT) {
 		quilt_width = ctx.get_width() * quilt_nr_cols;
 		quilt_height = ctx.get_height() * quilt_nr_rows;
@@ -1372,6 +1383,14 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				glViewport(vp[0], vp[1], vp[2], vp[3]);
 				glScissor(vp[0], vp[1], vp[2], vp[3]);
 				glEnable(GL_SCISSOR_TEST);
+
+				current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+
+				gl_set_projection_matrix(ctx, current_e, aspect);
+				gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+				if (show_holes)
+					draw_holes(ctx);
 
 				if (multiview_mpx_mode == MVM_BASELINE)
 					draw_baseline(ctx);
@@ -1409,6 +1428,14 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		for (vi = 0; vi < nr_holo_views; ++vi) {
 			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+
+			gl_set_projection_matrix(ctx, current_e, aspect);
+			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+
+			if (show_holes)
+				draw_holes(ctx);
 
 			if (multiview_mpx_mode == MVM_BASELINE)
 				draw_baseline(ctx);
@@ -1658,8 +1685,9 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(
-				  this, "prune empty areas", prune_heightmap, "check",
-				  "tooltip='discard heightmap fragments which dont represent valid geometry';shortcut='p'");
+				  this, "prune empty areas", prune_heightmap, "check");
+			add_member_control(
+				  this, "show holes", show_holes, "check");
 			add_member_control(this, "Generate Hologram", generate_hologram, "toggle");
 			add_member_control(this, "Write To File", display_write_to_file, "toggle");
 			end_tree_node(multiview_mpx_mode);
@@ -1800,6 +1828,7 @@ bool holo_view_interactor::self_reflect(cgv::reflect::reflection_handler& srh)
 		   srh.reflect_member("quilt_nr_cols", quilt_nr_cols) && srh.reflect_member("quilt_nr_rows", quilt_nr_rows) &&
 		   srh.reflect_member("quilt_interpolate", quilt_interpolate)&&
 		   srh.reflect_member("prune_heightmap", prune_heightmap)&&
+		   srh.reflect_member("show_holes", show_holes) &&
 		   srh.reflect_member("heightmap_oversampling", heightmap_oversampling)&&
 		   srh.reflect_member("epsilon", epsilon);
 }

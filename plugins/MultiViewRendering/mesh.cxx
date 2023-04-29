@@ -210,7 +210,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	/// called when an instance of this class is registered with the Framework
 	void on_register()
 	{
-		// --NOTE-- obviously, a window can only have one title, so it should be set in the most central, "main"
+		// --NOTE-- obviously, a window can only have one title, so it should be 
+		//  in the most central, "main"
 		//          class that the project has (which this one, as it just provides some geometry to display, might
 		//          not be anymore at some point)
 		cgv::gui::application::get_window(0)->set("title", "Multi-View Rendering for Holographic Displays");
@@ -246,7 +247,6 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		// [re-]compute mesh render info
 		mesh_for_holes_info.destruct(ctx);
 		mesh_for_holes_info.construct(ctx, M);
-		// bind mesh attributes to standard surface shader program
 		mesh_for_holes_info.bind(ctx, test.holes_shader, true);
 
 		// update sphere attribute array manager
@@ -261,7 +261,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 		// update view
 		// make sure we have the view available
-		if (!view) {
+		if (!view)
+		{
 			view = dynamic_cast<stereo_view*>(find_view_as_node());
 			dynamic_cast<node*>(view)->set(
 				  "clip_relative_to_extent",
@@ -462,16 +463,23 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			glDisable(GL_CULL_FACE);
 
 		// choose a shader program and configure it based on current settings
-		shader_program& prog = ctx.ref_surface_shader_program(true);
-		prog.set_uniform(ctx, "culling_mode", (int)cull_mode);
-		prog.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
-		prog.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
-		// set default surface color for color mapping which only affects
-		// rendering if mesh does not have per vertex colors and color_mapping is on
-		// prog.set_attribute(ctx, prog.get_color_index(), surface_color);
-		ctx.set_color(surface_color);
-		// render the mesh from the vertex buffers with selected program
-		mesh_info.draw_all(ctx, opaque_part, !opaque_part);
+		if (ctx.get_current_program() == 0) {
+			shader_program& prog = ctx.ref_surface_shader_program(true);
+			prog.set_uniform(ctx, "culling_mode", (int)cull_mode);
+			prog.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
+			prog.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
+			// set default surface color for color mapping which only affects
+			// rendering if mesh does not have per vertex colors and color_mapping is on
+			// prog.set_attribute(ctx, prog.get_color_index(), surface_color);
+			ctx.set_color(surface_color);
+			// render the mesh from the vertex buffers with selected program
+			mesh_info.draw_all(ctx, opaque_part, !opaque_part);
+		}
+		else {
+			glDisable(GL_CULL_FACE);
+			mesh_for_holes_info.draw_all(ctx);
+			glEnable(GL_CULL_FACE);
+		}
 		// recover opengl culling mode
 		if (is_culling)
 			glEnable(GL_CULL_FACE);

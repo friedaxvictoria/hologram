@@ -162,6 +162,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	mat4 inv_mat_proj_render[3], modelview_source[3];
 	vec4 eye_source[3];
 
+	cgv::render::drawable* mesh_drawable;
+
   public:
 	void set_default_values();
 
