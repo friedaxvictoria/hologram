@@ -1,25 +1,12 @@
 #version 460 core
 
-/***** begin interface of view.glsl ***********************************/
-mat4 get_modelview_matrix();
-mat4 get_projection_matrix();
-mat4 get_modelview_projection_matrix();
-mat4 get_inverse_modelview_matrix();
-mat4 get_inverse_modelview_projection_matrix();
-mat3 get_normal_matrix();
-mat3 get_inverse_normal_matrix();
-/***** end interface of view.glsl ***********************************/
-
 in vec2 texcoord;
 
 out vec2 texcoord_fs;
-out mat4 mvp;
 
 void main()
 {  	
 	texcoord_fs = texcoord;
-
-	mvp = get_modelview_projection_matrix();
 
 	gl_Position = vec4(2*texcoord.s-1, 2*texcoord.t-1, 0, 1);
 }

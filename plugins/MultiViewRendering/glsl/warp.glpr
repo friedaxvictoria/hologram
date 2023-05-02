@@ -1,3 +1,2 @@
 vertex_file:warp.glvs
-vertex_file:view.glsl
 fragment_file:warp.glfs

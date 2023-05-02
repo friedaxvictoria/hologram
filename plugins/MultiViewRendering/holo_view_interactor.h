@@ -134,7 +134,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
 	float heightmap_oversampling = 1.f; // oversampling factor of the heightmap (to be able to resolve finer details)
-	float w = 100.0;
+	float w = 1.0;
 
   protected:
 	// internal parameters used during multipass rendering
@@ -160,7 +160,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
 	mat4 inv_mat_proj_render[3], modelview_source[3];
-	vec4 eye_source[3];
+	vec3 eye_source[3];
 
 	cgv::render::drawable* mesh_drawable;
 

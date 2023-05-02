@@ -1103,9 +1103,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 			if (multiview_mpx_mode != MVM_BASIC) {
 				modelview_source[vi] = ctx.get_modelview_matrix();
-				vec3 offset = vec3(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0);
-				eye_source[vi] =
-					  ctx.get_projection_matrix() * ctx.get_modelview_matrix() * vec4(offset + get_eye(), 1);
+				eye_source[vi] = get_eye() + vec3(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0);
 			}
 		}
 
@@ -1139,6 +1137,11 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 			if (multi_pass_terminate(ctx)) {
 				// turn our up to 3 views into a quilt or hologram
 				compute_holo_views(ctx);
+				if (quilt_write_to_file) {
+					quilt_holo_tex.write_to_file(ctx, "quilt.png");
+					quilt_write_to_file = false;
+					on_set(&quilt_write_to_file);
+				}
 				post_process_surface(ctx);
 			}
 			else {
@@ -1259,8 +1262,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx) {
 		depth_tex.enable(ctx, 1);
 		baseline_shader.set_uniform(ctx, "depth", 1);
 
-		baseline_shader.set_uniform(ctx, "inv_proj_source", inv_mat_proj_render[i]);
-		baseline_shader.set_uniform(ctx, "modelview_source", modelview_source[i]);
+		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(modelview_source[i]) * inv_mat_proj_render[i]);
 		baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
 		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
 
@@ -1278,66 +1280,49 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx) {
 void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 {
 	double aspect = (double)ctx.get_width() / ctx.get_height();
+	vec3 eye_target = get_eye() + vec3(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0);
+	vec3 plane_normal = get_view_dir();
+	vec3 plane_point = get_focus();
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
-
-		vec3 offset = vec3(0.5f * current_e * get_eye_distance() * y_extent_at_focus * aspect, 0, 0);
-		vec4 eye_target = ctx.get_projection_matrix() * ctx.get_modelview_matrix() * vec4(offset + get_eye(), 1);
-		vec4 plane_normal =
-			  transpose(inv(inv(inv_mat_proj_render[i]) * modelview_source[i])) * vec4(get_view_dir(), 0);
-
-		vec4 test = vec4(1, 1, z_near_derived, 1);
-		vec4 test2 = inv(inv_mat_proj_render[i]) * modelview_source[i] * test;
 
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
 		warping_shader.set_uniform(ctx, "depth_tex", 1);
 
-		/* warping_shader.set_uniform(
-			  ctx, "p_1",
-			  compute_frustum_model_image_warp(y_extent_at_focus * aspect / 2, -y_extent_at_focus * aspect / 2,
-											   -y_extent_at_focus / 2,
-																	y_extent_at_focus/2,
-																	render_fbo[0].get_size()[0],
-																	render_fbo[0].get_size()[1], z_near_derived));
-		warping_shader.set_uniform(
-			  ctx, "p_2",
-			  compute_frustum_model_image_warp(y_extent_at_focus * aspect / 2, -y_extent_at_focus * aspect / 2,
-																	-y_extent_at_focus / 2,
-																	y_extent_at_focus/2,
-																	render_fbo[0].get_size()[0],
-																	render_fbo[0].get_size()[1], z_near_derived));*/
-		warping_shader.set_uniform(ctx, "mv_source", modelview_source[i]);
-		warping_shader.set_uniform(ctx, "inv_p_source", inv_mat_proj_render[i]);
+		warping_shader.set_uniform(ctx, "inv_mvp_source", inv(modelview_source[i]) * inv_mat_proj_render[i]);
+		warping_shader.set_uniform(ctx, "mvp_source", inv(inv_mat_proj_render[i]) * modelview_source[i]);
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
 		warping_shader.set_uniform(ctx, "eye_target", eye_target);
 		warping_shader.set_uniform(ctx, "plane_normal", plane_normal);
-		warping_shader.set_uniform(ctx, "point_on_plane", vec4(-1, -1, -1, 1));
-		warping_shader.set_uniform(ctx, "screen_width", (float)ctx.get_width()*heightmap_oversampling);
+		warping_shader.set_uniform(ctx, "point_on_plane", plane_point);
 		warping_shader.set_uniform(ctx, "w", (float)w);
 
-		float pt_depth = 0.2;
+		vec4 pt_world_coord =
+			  inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(2 * 0.6 - 1, 2 * 0.6 - 1, 2 * 0.99 - 1, 1);
+		vec3 pt_world_coord_clip = w_clip(pt_world_coord);
 
-		vec4 pt_clip_coord = vec4(2 * 0.6 - 1, 2 * 0.6 - 1, 2 * pt_depth - 1, 1);
-
-		vec4 eye_to_point = eye_source[i] - pt_clip_coord;
+		vec3 eye_to_point = eye_source[i] - pt_world_coord_clip;
 		float range_value = length(eye_to_point);
 
-		float intersection_param =
-			  dot((vec4(-1, -1, -1, 1) - eye_source[i]), plane_normal) / (dot(eye_to_point, plane_normal));
-		vec4 intersection = eye_source[i] + intersection_param * eye_to_point;
+		float intersection_param = dot((plane_point - eye_source[i]), plane_normal) / (dot(eye_to_point, plane_normal));
+		vec3 intersection = eye_source[i] + intersection_param * eye_to_point;
 
-		float length_pt_plane = length(pt_clip_coord - intersection);
+		float length_pt_plane = length(pt_world_coord_clip - intersection);
 
 		float eye_distance = (eye_target - eye_source[i])[0];
 
 		float x_offset = eye_distance / range_value * length_pt_plane;
 
-		vec2 new_texcoord = vec2(0.6 + x_offset, 0.6);
+		vec4 new_pos_clip = inv(inv_mat_proj_render[i]) * modelview_source[i] * 
+							vec4(intersection[0] + x_offset, intersection[1], intersection[2], 1);
+		float new_pos_ndc = new_pos_clip[0] / new_pos_clip[3];
+		float new_pos_window = (0.5 * (new_pos_ndc + 1));
 
+		vec2 new_texcoord = vec2(new_pos_window, 0.6);
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
@@ -1489,14 +1474,14 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			if (multiview_mpx_mode == MVM_BASIC)
 				quilt_render_tex.enable(ctx, 0);
 			else
-				quilt_holo_tex.enable(ctx, 0); // --NOTE-- change to quilt_holo_tex once ready
+				quilt_holo_tex.enable(ctx, 0);
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
 			if (multiview_mpx_mode == MVM_BASIC)
 				volume_render_tex.enable(ctx, 0);
 			else
-				volume_holo_tex.enable(ctx, 0); // --NOTE-- change to volume_holo_tex once ready
+				volume_holo_tex.enable(ctx, 0);
 			prog.set_uniform(ctx, "volume_tex", 0);
 		}
 		prog.set_uniform(ctx, "width", display_calib.width);
@@ -1546,25 +1531,6 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			}
 		}
 	}
-
-		
-	if (quilt_write_to_file && multiview_mpx_mode != MVM_BASIC) {
-		quilt_holo_tex.write_to_file(ctx, "quilt.png");
-		quilt_write_to_file = false;
-		on_set(&quilt_write_to_file);
-	}
-}
-
-mat3 holo_view_interactor::compute_frustum_model_image_warp(float r, float l, float b, float t, float w, float h, float n)
-{
-	mat3 p;
-	p.zeros();
-	p(0, 0) = (r - l) / w;
-	p(0, 2) = l;
-	p(1, 1) = (b - t) / h;
-	p(1, 2) = r;
-	p(2, 2) = n;
-	return p;
 }
 
 ///
@@ -1675,7 +1641,7 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
 							   "min=2;max=100;ticks=true");
 			add_member_control(this, "w", w, "value_slider",
-							   "min=2;max=1000;ticks=true");
+							   "min=;max=3;ticks=true");
 			add_member_control(this, "Oversample Heightmap", heightmap_oversampling, "value_slider",
 							   "min=0.5;max=4;step=0.5");
 			add_member_control(
@@ -1732,13 +1698,6 @@ void holo_view_interactor::create_gui()
 
 void holo_view_interactor::on_set(void* m)
 {
-	/* if (m == &nr_render_views)
-	{
-		if (find_control(view_index))
-			find_control(view_index)->set("max", nr_render_views - 1);
-		//nr_holo_views = nr_render_views; // --NOTE-- since no image-warping is implemented yet, we
-		//update_member(&nr_holo_views);	 //          force-synchronize those two parameters
-	}*/
 	if (m == &nr_holo_views)
 	{
 		if (find_control(view_index))
@@ -1751,11 +1710,6 @@ void holo_view_interactor::on_set(void* m)
 		holo_mpx_mode = HM_SINGLE; // --NOTE-- since no image-warping is implemented yet, we
 		update_member(&holo_mpx_mode);	 //          force-synchronize those two parameters
 	}
-	 /* else if (m == &holo_mpx_mode)
-	 {
-		render_mpx_mode = holo_mpx_mode; // --NOTE-- since no image-warping is implemented yet, we
-		update_member(&render_mpx_mode); //          force-synchronize those two parameters
-	}*/
 	update_member(m);
 	post_redraw();
 }
