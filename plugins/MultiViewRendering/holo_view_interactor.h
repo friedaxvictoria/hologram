@@ -110,11 +110,9 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   protected:
 	unsigned view_width = 1638;
 	unsigned view_height = 910;
-	unsigned nr_render_views =
-		  3; // --NOTE-- the baseline approach where the scene is rendered fully only in stereo would set this to 2
+	unsigned nr_render_views = 3;
 	unsigned view_index = 22;
-	unsigned nr_holo_views = 45; // --NOTE-- the number of views required for the hologram - currently
-								 // force-synchronized to nr_render_views in on_set()
+	unsigned nr_holo_views = 45;
 	int blit_offset_x = 0, blit_offset_y = 0;
 	bool generate_hologram = true;
 	bool display_write_to_file = false;
@@ -125,7 +123,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
   protected:
 	// quilt
-	rgb quilt_bg_color = rgb(0.0f, 0.0f, 0.0f);
+	rgb quilt_bg_color = rgb(0.3f, 0.3f, 0.3f);
 	bool quilt_use_offline_texture = true;
 	unsigned quilt_width = 8192;
 	unsigned quilt_height = 8192;
@@ -162,6 +160,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	mat4 inv_mat_proj_render[3], modelview_source[3];
 	vec3 eye_source[3];
 
+	//reference to mesh_viewer
 	cgv::render::drawable* mesh_drawable;
 
   public:
