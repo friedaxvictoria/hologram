@@ -957,8 +957,11 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 {
 	// create our offscreem framebuffers used to test image warping
 	for (unsigned i = 0; i < 3; i++) {
-		render_fbo[i].add_attachment("depth", "[D]");
-		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]");
+		render_fbo[i].add_attachment(
+			  "depth", "[D]",
+			  cgv::render::TextureFilter::TF_NEAREST,  cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
+		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
+									 cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
 	}
 
 	if (!quilt_prog.build_program(ctx, "quilt_finish.glpr", true))
@@ -972,7 +975,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	if (!holes_shader.build_program(ctx, "holes.glpr", true))
 		return false;
 
-	mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
 
@@ -985,6 +987,9 @@ void holo_view_interactor::init_frame(context& ctx)
 	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
 	quilt_width = view_width * quilt_nr_cols;
 	quilt_height = view_height * quilt_nr_rows;
+
+	if (!mesh_drawable)
+		mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
 
 	// check mono rendering case
 	switch (multiview_mpx_mode) {
@@ -1106,7 +1111,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 			if (multiview_mpx_mode != MVM_BASIC) {
 				modelview_source[vi] = ctx.get_modelview_matrix();
-				eye_source[vi] = get_eye() + vec3(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0);
+				eye_source[vi] = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 			}
 		}
 
@@ -1243,7 +1248,6 @@ void holo_view_interactor::draw_holes(cgv::render::context& ctx)
 	holes_shader.enable(ctx);
 	glDisable(GL_DEPTH_TEST);
 
-	mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
 	mesh_drawable->draw(ctx);
 
 	glEnable(GL_DEPTH_TEST);
@@ -1283,9 +1287,9 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
 
-	vec3 plane_normal = view_dir;
-	vec3 plane_point = cgv::render::view::focus;
-	vec3 eye_target = get_eye() + vec3(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0);
+	vec4 plane_normal = vec4(0,0,-1,0);
+	vec4 plane_point = vec4(0,0,-z_far_derived,1);
+	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
@@ -1296,32 +1300,33 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		depth_tex.enable(ctx, 1);
 		warping_shader.set_uniform(ctx, "depth_tex", 1);
 
-		warping_shader.set_uniform(ctx, "inv_mvp_source", inv(modelview_source[i]) * inv_mat_proj_render[i]);
-		warping_shader.set_uniform(ctx, "mvp_source", inv(inv_mat_proj_render[i]) * modelview_source[i]);
+		warping_shader.set_uniform(ctx, "p_source", inv(inv_mat_proj_render[i]));
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
 		warping_shader.set_uniform(ctx, "eye_target", eye_target);
 		warping_shader.set_uniform(ctx, "plane_normal", plane_normal);
 		warping_shader.set_uniform(ctx, "point_on_plane", plane_point);
 		warping_shader.set_uniform(ctx, "w", (float)w);
 
-		vec4 pt_world_coord =
-			  inv(modelview_source[i]) * inv_mat_proj_render[i] * vec4(2 * 0.6 - 1, 2 * 0.6 - 1, 2 * 0.99 - 1, 1);
-		vec3 pt_world_coord_clip = w_clip(pt_world_coord);
+		vec4 pt_eye_coord =
+			  inv_mat_proj_render[i] * vec4(2 * 0.6 - 1, 2 * 0.6 - 1, 1, 1);
+		vec4 pt_eye_coord_clip = vec4(w_clip(pt_eye_coord),1);
 
-		vec3 eye_to_point = eye_source[i] - pt_world_coord_clip;
+		vec4 eye_to_point = eye_source[i] - pt_eye_coord_clip;
 		float range_value = length(eye_to_point);
 
+		//float intersection_param = z_far_derived / (dot(eye_to_point, plane_normal));
 		float intersection_param = dot((plane_point - eye_source[i]), plane_normal) / (dot(eye_to_point, plane_normal));
-		vec3 intersection = eye_source[i] + intersection_param * eye_to_point;
+		vec4 intersection = eye_source[i] + intersection_param * eye_to_point;
+		intersection = vec4(w_clip(intersection), 1);
 
-		float length_pt_plane = length(pt_world_coord_clip - intersection);
+		float length_pt_plane = length(pt_eye_coord - intersection);
 
 		float eye_distance = (eye_target - eye_source[i])[0];
 
 		float x_offset = eye_distance / range_value * length_pt_plane;
 
-		vec4 new_pos_clip = inv(inv_mat_proj_render[i]) * modelview_source[i] *
-							vec4(intersection[0] + x_offset, intersection[1], intersection[2], 1);
+		vec4 new_pos_clip = inv(inv_mat_proj_render[i]) *
+							vec4(intersection[0] + x_offset, intersection[1], intersection[2], intersection[3]);
 		float new_pos_ndc = new_pos_clip[0] / new_pos_clip[3];
 		float new_pos_window = (0.5 * (new_pos_ndc + 1));
 

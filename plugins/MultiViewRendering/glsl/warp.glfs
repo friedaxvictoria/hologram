@@ -5,14 +5,13 @@ in vec2 texcoord_fs;
 uniform sampler2D color_tex;
 uniform sampler2D depth_tex;
 
-uniform mat4 inv_mvp_source;
-uniform mat4 mvp_source;
+uniform mat4 p_source;
 
-uniform vec3 eye_source;
-uniform vec3 eye_target;
+uniform vec4 eye_source;
+uniform vec4 eye_target;
 
-uniform vec3 plane_normal;
-uniform vec3 point_on_plane;
+uniform vec4 plane_normal;
+uniform vec4 point_on_plane;
 
 uniform float w;
 
@@ -22,28 +21,26 @@ out vec4 color;
 void main()
 {
 	float pt_depth = textureLod(depth_tex, texcoord_fs, 0).r;
-	
+	if (pt_depth >= 1.0)
+		discard;
 
-	vec4 pt_world_coord = inv_mvp_source * vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1);
-	vec3 pt_world_coord_clip = pt_world_coord.xyz/pt_world_coord.w;
+	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1);
+	vec4 pt_eye_coord_clip = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
-	vec3 source_to_point = eye_source - pt_world_coord_clip;
+	vec4 source_to_point = eye_source - pt_eye_coord_clip;
 	float length_pt_source = length(source_to_point);
 
 	float intersection_param = dot((point_on_plane-eye_source),plane_normal) / (dot(source_to_point, plane_normal));
-	vec3 intersection = eye_source + intersection_param * source_to_point;
+	vec4 intersection = eye_source + intersection_param * source_to_point;
+	intersection = vec4(intersection.xyz/intersection.w,1);
 
-	float length_pt_plane = length(pt_world_coord_clip - intersection);
+	float length_pt_plane = length(pt_eye_coord_clip - intersection);
 
 	float eye_distance = (eye_target-eye_source).x;
 
 	float x_offset = eye_distance/length_pt_source*length_pt_plane;
 
-	//flip offset if point lies behind screen
-	if (dot(plane_normal, (pt_world_coord_clip-point_on_plane))>0)
-		x_offset = -x_offset;
-
-	vec4 new_pos_clip = mvp_source * vec4(intersection[0] + x_offset, intersection[1], intersection[2], 1);
+	vec4 new_pos_clip = p_source * vec4(intersection[0] + x_offset, intersection[1], intersection[2], intersection[3]);
 	float new_pos_ndc = new_pos_clip.x/new_pos_clip.w;
 	float new_pos_window = (0.5*(new_pos_ndc+1));
 
@@ -62,11 +59,9 @@ void main()
 	/*if (dot(plane_normal, (pt_world_coord_clip-point_on_plane))>0)
 		color = vec4(1,0,0,1);
 	else 
-		color = vec4(0,1,0,1);
-	float d = length_pt_plane * w;*/
-	//color = vec4(eye_source*w,1);
-	if (pt_depth >= 1.0)
-		discard;
+		color = vec4(0,1,0,1);*/
+	float d = -pt_eye_coord.z * w;
+	//color = vec4(d,d,d,1);
 
 	gl_FragDepth = 2*textureLod(depth_tex, new_texcoord, 0).r-1;
 }
