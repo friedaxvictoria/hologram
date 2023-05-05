@@ -25,43 +25,35 @@ void main()
 		discard;
 
 	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1);
-	vec4 pt_eye_coord_clip = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
+	pt_eye_coord = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
-	vec4 source_to_point = eye_source - pt_eye_coord_clip;
+	/*vec4 source_to_point = eye_source - pt_eye_coord;
 	float length_pt_source = length(source_to_point);
 
-	float intersection_param = dot((point_on_plane-eye_source),plane_normal) / (dot(source_to_point, plane_normal));
-	vec4 intersection = eye_source + intersection_param * source_to_point;
-	intersection = vec4(intersection.xyz/intersection.w,1);
+	vec4 intersection = eye_source + source_to_point * point_on_plane.z / source_to_point.z;
 
-	float length_pt_plane = length(pt_eye_coord_clip - intersection);
+	float length_pt_plane = length(pt_eye_coord - intersection);
 
 	float eye_distance = (eye_target-eye_source).x;
 
-	float x_offset = eye_distance/length_pt_source*length_pt_plane;
+	float x_offset = -eye_distance/length_pt_source*length_pt_plane;
 
-	vec4 new_pos_clip = p_source * vec4(intersection[0] + x_offset, intersection[1], intersection[2], intersection[3]);
-	float new_pos_ndc = new_pos_clip.x/new_pos_clip.w;
-	float new_pos_window = (0.5*(new_pos_ndc+1));
-
-	/*vec3 eye_to_point = eye_target - pt_world_coord_clip;
-	float intersection_param = dot((point_on_plane-eye_target),plane_normal) / (dot(eye_to_point, plane_normal));
-	vec3 intersection = eye_target + intersection_param * eye_to_point;
-
-	vec4 new_pos_clip = mvp_source * vec4(intersection, 1);
+	vec4 new_pos_clip = p_source * vec4(intersection.x + x_offset, intersection.y, intersection.z, intersection.w);
 	float new_pos_ndc = new_pos_clip.x/new_pos_clip.w;
 	float new_pos_window = (0.5*(new_pos_ndc+1));*/
 
-	vec2 new_texcoord = vec2(new_pos_window, texcoord_fs.t);
+	vec4 target_to_point = eye_target - pt_eye_coord;
+	//vec4 intersection_2 = eye_target + target_to_point * point_on_plane.z / target_to_point.z;
+
+	float l = -length(target_to_point);
+
+	vec4 new_pos_clip_2 = p_source * vec4(pt_eye_coord.x, pt_eye_coord.y, l, pt_eye_coord.w);
+	float new_pos_ndc_2 = new_pos_clip_2.x/new_pos_clip_2.w;
+	float new_pos_window_2 = (0.5*(new_pos_ndc_2+1));
+
+	vec2 new_texcoord = vec2(new_pos_window_2, texcoord_fs.t);
 
 	color = textureLod(color_tex, new_texcoord, 0);
-	
-	/*if (dot(plane_normal, (pt_world_coord_clip-point_on_plane))>0)
-		color = vec4(1,0,0,1);
-	else 
-		color = vec4(0,1,0,1);*/
-	float d = -pt_eye_coord.z * w;
-	//color = vec4(d,d,d,1);
 
 	gl_FragDepth = 2*textureLod(depth_tex, new_texcoord, 0).r-1;
 }

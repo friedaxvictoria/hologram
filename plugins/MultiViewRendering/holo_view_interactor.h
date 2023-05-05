@@ -157,8 +157,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
-	mat4 inv_mat_proj_render[3], modelview_source[3];
-	vec4 eye_source[3];
+	mat4 proj_source[3], modelview_source[3];
+	vec4 eye_source[3], plane_point;
 
 	//reference to mesh_viewer
 	cgv::render::drawable* mesh_drawable = nullptr;

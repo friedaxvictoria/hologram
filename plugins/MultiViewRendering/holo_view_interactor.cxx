@@ -1104,7 +1104,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
-				inv_mat_proj_render[vi] = inv(ctx.get_projection_matrix());
+				proj_source[vi] = ctx.get_projection_matrix();
 		}
 
 		if (rpf & RPF_SET_MODELVIEW) {
@@ -1144,6 +1144,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 
 			if (multi_pass_terminate(ctx)) {
 				// turn our up to 3 views into a quilt or hologram
+				plane_point = vec4(w_clip(inv(ctx.get_projection_matrix()) * vec4(0, 0, 1, 1)), 1);
 				compute_holo_views(ctx);
 				if (quilt_write_to_file) {
 					quilt_holo_tex.write_to_file(ctx, "quilt.png");
@@ -1266,7 +1267,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 		depth_tex.enable(ctx, 1);
 		baseline_shader.set_uniform(ctx, "depth", 1);
 
-		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(modelview_source[i]) * inv_mat_proj_render[i]);
+		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(proj_source[i] * modelview_source[i]));
 		baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
 		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
 
@@ -1288,7 +1289,6 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	double aspect = (double)vp[2] / vp[3];
 
 	vec4 plane_normal = vec4(0,0,-1,0);
-	vec4 plane_point = vec4(0,0,-z_far_derived,1);
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
@@ -1300,7 +1300,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		depth_tex.enable(ctx, 1);
 		warping_shader.set_uniform(ctx, "depth_tex", 1);
 
-		warping_shader.set_uniform(ctx, "p_source", inv(inv_mat_proj_render[i]));
+		warping_shader.set_uniform(ctx, "p_source", proj_source[i]);
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
 		warping_shader.set_uniform(ctx, "eye_target", eye_target);
 		warping_shader.set_uniform(ctx, "plane_normal", plane_normal);
@@ -1308,29 +1308,32 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		warping_shader.set_uniform(ctx, "w", (float)w);
 
 		vec4 pt_eye_coord =
-			  inv_mat_proj_render[i] * vec4(2 * 0.6 - 1, 2 * 0.6 - 1, 1, 1);
+			  inv(proj_source[i]) * vec4(2 * 0.5 - 1, 2 * 0.6 - 1, 2*0.5-1, 1);
 		vec4 pt_eye_coord_clip = vec4(w_clip(pt_eye_coord),1);
 
 		vec4 eye_to_point = eye_source[i] - pt_eye_coord_clip;
 		float range_value = length(eye_to_point);
 
-		//float intersection_param = z_far_derived / (dot(eye_to_point, plane_normal));
-		float intersection_param = dot((plane_point - eye_source[i]), plane_normal) / (dot(eye_to_point, plane_normal));
-		vec4 intersection = eye_source[i] + intersection_param * eye_to_point;
-		intersection = vec4(w_clip(intersection), 1);
+		vec4 intersection = eye_source[i] - eye_to_point * z_far_derived / eye_to_point[2];
 
-		float length_pt_plane = length(pt_eye_coord - intersection);
+		float length_pt_plane = length(pt_eye_coord_clip - intersection);
 
 		float eye_distance = (eye_target - eye_source[i])[0];
 
-		float x_offset = eye_distance / range_value * length_pt_plane;
+		float x_offset = -eye_distance / range_value * length_pt_plane;
 
-		vec4 new_pos_clip = inv(inv_mat_proj_render[i]) *
+		vec4 new_pos_clip = proj_source[i] *
 							vec4(intersection[0] + x_offset, intersection[1], intersection[2], intersection[3]);
 		float new_pos_ndc = new_pos_clip[0] / new_pos_clip[3];
 		float new_pos_window = (0.5 * (new_pos_ndc + 1));
 
-		vec2 new_texcoord = vec2(new_pos_window, 0.6);
+
+		vec4 target_to_point = eye_target - pt_eye_coord_clip;
+		vec4 intersection_2 = eye_target - target_to_point * z_far_derived / target_to_point[2];
+
+		vec4 new_pos_clip_2 = proj_source[i] * intersection_2;
+		vec3 new_pos_ndc_2 = w_clip(new_pos_clip_2);
+		float new_pos_window_2 = (0.5 * (new_pos_ndc_2[0] + 1));
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);

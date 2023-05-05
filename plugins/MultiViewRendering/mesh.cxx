@@ -264,9 +264,9 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		if (!view)
 		{
 			view = dynamic_cast<stereo_view*>(find_view_as_node());
-			dynamic_cast<node*>(view)->set(
-				  "clip_relative_to_extent",
-				  true); // comment this line to use default behaviour of adaptating znear/zfar to scene
+			//dynamic_cast<node*>(view)->set(
+			//"clip_relative_to_extent",
+				//  true); // comment this line to use default behaviour of adaptating znear/zfar to scene
 		}
 		// focus view on new mesh
 		view->set_scene_extent(M_bbox);
