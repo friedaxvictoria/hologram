@@ -13,6 +13,7 @@
 #include <cgv/reflect/reflect_enum.h>
 #include <cgv_gl/gl/gl.h>
 #include <glsu/GL/glsu.h>
+#include <chrono>
 #if defined(_WINDOWS) || defined(WIN32) || defined(WIN64)
 #undef max
 #undef min
@@ -158,10 +159,12 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
 	mat4 proj_source[3], modelview_source[3];
-	vec4 eye_source[3], plane_point;
+	vec4 eye_source[3];
 
 	//reference to mesh_viewer
 	cgv::render::drawable* mesh_drawable = nullptr;
+
+	std::chrono::steady_clock::time_point time_start, time_end;
 
   public:
 	void set_default_values();

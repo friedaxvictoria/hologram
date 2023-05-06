@@ -18,6 +18,7 @@
 #include <cgv/gui/mouse_event.h>
 #include <cgv/media/image/image_writer.h>
 #include <cgv/type/variant.h>
+#include <chrono>
 #include <cmath>
 #include <stdio.h>
 
@@ -984,6 +985,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 /// this method is called in one pass over all drawables before the draw method
 void holo_view_interactor::init_frame(context& ctx)
 {
+	time_start = std::chrono::high_resolution_clock::now();
 	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
 	quilt_width = view_width * quilt_nr_cols;
 	quilt_height = view_height * quilt_nr_rows;
@@ -1144,7 +1146,6 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 
 			if (multi_pass_terminate(ctx)) {
 				// turn our up to 3 views into a quilt or hologram
-				plane_point = vec4(w_clip(inv(ctx.get_projection_matrix()) * vec4(0, 0, 1, 1)), 1);
 				compute_holo_views(ctx);
 				if (quilt_write_to_file) {
 					quilt_holo_tex.write_to_file(ctx, "quilt.png");
@@ -1158,6 +1159,10 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 			}
 		}
 	}
+	time_end = std::chrono::high_resolution_clock::now();
+	std::cout << std::fixed << multiview_mpx_mode << " with " << nr_render_views << " source views, took "
+			  << std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_start).count()
+			  << " microseconds." << std::endl;
 }
 
 void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
@@ -1294,9 +1299,9 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
 
-		vec3 t1 = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
-		vec3 t2 = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
-		float t3 = t2[0] - t1[0];
+		vec3 shear_source = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
+		vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
+		float shear = shear_target[0] - shear_source[0];
 
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
@@ -1307,7 +1312,8 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
 		warping_shader.set_uniform(ctx, "eye_target", eye_target);
 		warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
-		warping_shader.set_uniform(ctx, "shear", t3);
+		warping_shader.set_uniform(ctx, "shear", shear);
+		warping_shader.set_uniform(ctx, "epsilon", epsilon);
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);

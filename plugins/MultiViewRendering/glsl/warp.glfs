@@ -2,12 +2,19 @@
 
 in float discard_fs;
 in vec4 color_fs;
+in vec3 direction_fs;
+in vec4 pos_eye;
+
+uniform float epsilon;
 
 out vec4 color;
 
-
 void main()
 {
+	vec3 normal = normalize(cross(dFdx(pos_eye.xyz), dFdy(pos_eye.xyz)));
+	float ortho_to_proj = abs(dot(direction_fs, normal));
+	if (ortho_to_proj < epsilon)
+		discard;
 	if (discard_fs > 0)
 		discard; // don't render "empty" geometry
 	color = color_fs;
