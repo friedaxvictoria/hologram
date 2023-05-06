@@ -1288,12 +1288,15 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
 
-	vec4 plane_normal = vec4(0,0,-1,0);
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+		vec3 t1 = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
+		vec3 t2 = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
+		float t3 = t2[0] - t1[0];
 
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
@@ -1303,37 +1306,8 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		warping_shader.set_uniform(ctx, "p_source", proj_source[i]);
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
 		warping_shader.set_uniform(ctx, "eye_target", eye_target);
-		warping_shader.set_uniform(ctx, "plane_normal", plane_normal);
-		warping_shader.set_uniform(ctx, "point_on_plane", plane_point);
-		warping_shader.set_uniform(ctx, "w", (float)w);
-
-		vec4 pt_eye_coord =
-			  inv(proj_source[i]) * vec4(2 * 0.5 - 1, 2 * 0.6 - 1, 2*0.5-1, 1);
-		vec4 pt_eye_coord_clip = vec4(w_clip(pt_eye_coord),1);
-
-		vec4 eye_to_point = eye_source[i] - pt_eye_coord_clip;
-		float range_value = length(eye_to_point);
-
-		vec4 intersection = eye_source[i] - eye_to_point * z_far_derived / eye_to_point[2];
-
-		float length_pt_plane = length(pt_eye_coord_clip - intersection);
-
-		float eye_distance = (eye_target - eye_source[i])[0];
-
-		float x_offset = -eye_distance / range_value * length_pt_plane;
-
-		vec4 new_pos_clip = proj_source[i] *
-							vec4(intersection[0] + x_offset, intersection[1], intersection[2], intersection[3]);
-		float new_pos_ndc = new_pos_clip[0] / new_pos_clip[3];
-		float new_pos_window = (0.5 * (new_pos_ndc + 1));
-
-
-		vec4 target_to_point = eye_target - pt_eye_coord_clip;
-		vec4 intersection_2 = eye_target - target_to_point * z_far_derived / target_to_point[2];
-
-		vec4 new_pos_clip_2 = proj_source[i] * intersection_2;
-		vec3 new_pos_ndc_2 = w_clip(new_pos_clip_2);
-		float new_pos_window_2 = (0.5 * (new_pos_ndc_2[0] + 1));
+		warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+		warping_shader.set_uniform(ctx, "shear", t3);
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
