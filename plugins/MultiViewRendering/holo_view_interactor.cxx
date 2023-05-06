@@ -985,7 +985,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 /// this method is called in one pass over all drawables before the draw method
 void holo_view_interactor::init_frame(context& ctx)
 {
-	time_start = std::chrono::high_resolution_clock::now();
 	cgv::render::RenderPassFlags rpf = ctx.get_render_pass_flags();
 	quilt_width = view_width * quilt_nr_cols;
 	quilt_height = view_height * quilt_nr_rows;
@@ -1074,8 +1073,8 @@ void holo_view_interactor::init_frame(context& ctx)
 		/// scene fills the whole viewport, it will appear in 3D to be roughly the same physical real-world
 		/// size as the screen.
 		///
-		enable_warp_fb(ctx);
 		if (initiate_render_pass_recursion(ctx)) {
+			enable_warp_fb(ctx);
 			vi = 0;
 			for (int i = 0; i < nr_render_views; i++) {
 				current_render_fbo = render_fbo[vi];
@@ -1106,7 +1105,9 @@ void holo_view_interactor::init_frame(context& ctx)
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
+			if (multiview_mpx_mode != MVM_BASIC) {
 				proj_source[vi] = ctx.get_projection_matrix();
+			}
 		}
 
 		if (rpf & RPF_SET_MODELVIEW) {
@@ -1159,16 +1160,19 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 			}
 		}
 	}
-	time_end = std::chrono::high_resolution_clock::now();
-	std::cout << std::fixed << multiview_mpx_mode << " with " << nr_render_views << " source views, took "
-			  << std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_start).count()
-			  << " microseconds." << std::endl;
+	if (multi_pass_terminate(ctx)) {
+		time_end = std::chrono::high_resolution_clock::now();
+		std::cout << std::fixed << multiview_mpx_mode << " with " << nr_render_views << " source views, took "
+				  << std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_start).count()
+				  << " microseconds." << std::endl;
+	}
 }
 
 void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 {
 	// check if render fbo needs re-initialization (we always change all 3 at the same time, so we just check the
 	// center one)
+	time_start = std::chrono::high_resolution_clock::now();
 	auto& fb = render_fbo[1].ref_frame_buffer();
 	if (fb.get_width() != (int)float(view_width * heightmap_oversampling) ||
 		fb.get_height() != (int)float(view_height * heightmap_oversampling))
@@ -1197,6 +1201,7 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 {
+	time_start = std::chrono::high_resolution_clock::now();
 	if (holo_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;
