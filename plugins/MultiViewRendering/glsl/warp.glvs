@@ -20,10 +20,6 @@ out vec3 direction_fs;
 
 void main()
 {  	
-	vec4 proj_one = inverse(p_source) * vec4(2*texcoord.s-1, 2*texcoord.t-1, 0, 1);
-	vec4 proj_two = inverse(p_source) * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
-	direction_fs = normalize(proj_one.xyz/proj_one.w - proj_two.xyz/proj_two.w);
-
 	float pt_depth = textureLod(depth_tex, texcoord, 0).r;
 	discard_fs = pt_depth < 1 ? 0 : 1;
 	color_fs = textureLod(color_tex, texcoord, 0);
@@ -33,6 +29,8 @@ void main()
 
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 	intersection_z_far.x = intersection_z_far.x - shear;
+
+	direction_fs = normalize(eye_source.xyz/eye_source.w - pos_eye.xyz);
 
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
