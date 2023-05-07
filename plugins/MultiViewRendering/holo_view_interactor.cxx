@@ -1044,6 +1044,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		break;
 	case MVM_BASELINE:
 	case MVM_WARPING:
+	case MVM_WARPING_CLOSEST:
 		/////////////////////////////////////////////
 		/// --NOTE--
 		/// In quilt or volume mode, we want to spawn an additional render pass over all drawables for every
@@ -1101,7 +1102,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	double aspect = (double)vp[2] / vp[3];
 
 	// compute the clipping planes based on the eye and scene extent
-	if ((vi < nr_render_views) || (multiview_mpx_mode != MVM_BASELINE && multiview_mpx_mode != MVM_WARPING)) {
+	if ((vi < nr_render_views) || (multiview_mpx_mode != MVM_BASELINE && multiview_mpx_mode != MVM_WARPING && multiview_mpx_mode != MVM_WARPING_CLOSEST)) {
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
@@ -1278,7 +1279,6 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 		baseline_shader.set_uniform(ctx, "depth", 1);
 
 		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(proj_source[i] * modelview_source[i]));
-		baseline_shader.set_uniform(ctx, "prune_empty", prune_heightmap);
 		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
 
 		baseline_shader.enable(ctx);
@@ -1289,6 +1289,52 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
+}
+
+// Iterate once over all rendered views to generate one holo view with the image warping approach
+void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
+{
+	GLint vp[4];
+	glGetIntegerv(GL_VIEWPORT, vp);
+	double aspect = (double)vp[2] / vp[3];
+
+	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+
+	int source_idx = 0;
+	float diff = std::numeric_limits<float>::max();
+	for (int i = 0; i < nr_render_views; i++) {
+		if (abs(eye_target[0]-eye_source[i][0])<diff){
+			source_idx = i;
+			diff = abs(eye_target[0]-eye_source[i][0]);
+		}
+	}
+	texture &color_tex = *render_fbo[source_idx].attachment_texture_ptr("color"),
+			&depth_tex = *render_fbo[source_idx].attachment_texture_ptr("depth");
+
+	vec3 shear_source = w_clip(inv(proj_source[source_idx]) * vec4(1, 0, 1, 1));
+	vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
+	float shear = shear_target[0] - shear_source[0];
+
+	color_tex.enable(ctx, 0);
+	warping_shader.set_uniform(ctx, "color_tex", 0);
+	depth_tex.enable(ctx, 1);
+	warping_shader.set_uniform(ctx, "depth_tex", 1);
+
+	warping_shader.set_uniform(ctx, "p_source", proj_source[source_idx]);
+	warping_shader.set_uniform(ctx, "eye_source", eye_source[source_idx]);
+	warping_shader.set_uniform(ctx, "eye_target", eye_target);
+	warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	warping_shader.set_uniform(ctx, "shear", shear);
+	warping_shader.set_uniform(ctx, "epsilon", epsilon);
+	warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+
+	warping_shader.enable(ctx);
+	glDisable(GL_CULL_FACE);
+	heightmap_warp.draw(ctx);
+	glEnable(GL_CULL_FACE);
+	warping_shader.disable(ctx);
+	color_tex.disable(ctx);
+	depth_tex.disable(ctx);
 }
 
 // Iterate once over all rendered views to generate one holo view with the image warping approach
@@ -1319,6 +1365,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 		warping_shader.set_uniform(ctx, "shear", shear);
 		warping_shader.set_uniform(ctx, "epsilon", epsilon);
+		warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
 		warping_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
@@ -1375,6 +1422,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 
 				if (multiview_mpx_mode == MVM_BASELINE)
 					draw_baseline(ctx);
+				else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
+					draw_image_warp_closest(ctx);
 				else
 					draw_image_warp(ctx);
 
@@ -1417,9 +1466,10 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 
 			if (show_holes)
 				draw_holes(ctx);
-
 			if (multiview_mpx_mode == MVM_BASELINE)
 				draw_baseline(ctx);
+			else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
+				draw_image_warp_closest(ctx);
 			else
 				draw_image_warp(ctx);
 		}
@@ -1627,7 +1677,7 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping'");
+							   "enums='single view, basic view, baseline, warping, warping to closest'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
@@ -1643,7 +1693,7 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
-			add_member_control(this, "prune empty areas", prune_heightmap, "check");
+			add_member_control(this, "discard artefacts", dis_artefacts, "check");
 			add_member_control(this, "show holes", show_holes, "check");
 			add_member_control(this, "Generate Hologram", generate_hologram, "toggle");
 			add_member_control(this, "Write To File", display_write_to_file, "toggle");
@@ -1767,7 +1817,7 @@ bool holo_view_interactor::self_reflect(cgv::reflect::reflection_handler& srh)
 		   srh.reflect_member("quilt_use_offline_texture", quilt_use_offline_texture) &&
 		   srh.reflect_member("quilt_nr_cols", quilt_nr_cols) && srh.reflect_member("quilt_nr_rows", quilt_nr_rows) &&
 		   srh.reflect_member("quilt_interpolate", quilt_interpolate) &&
-		   srh.reflect_member("prune_heightmap", prune_heightmap) && srh.reflect_member("show_holes", show_holes) &&
+		   srh.reflect_member("dis_artefacts", dis_artefacts) && srh.reflect_member("show_holes", show_holes) &&
 		   srh.reflect_member("heightmap_oversampling", heightmap_oversampling) &&
 		   srh.reflect_member("epsilon", epsilon);
 }

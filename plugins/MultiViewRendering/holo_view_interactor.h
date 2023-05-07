@@ -105,7 +105,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -139,7 +139,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// internal parameters used during multipass rendering
 	unsigned vi = 0, quilt_col = 0, quilt_row = 0;
 	float epsilon = 0.02;
-	bool prune_heightmap = true, show_holes = true; 
+	bool show_holes = true, dis_artefacts = false; 
 
 	cgv::render::frame_buffer quilt_fbo;
 	cgv::render::texture quilt_holo_tex, quilt_render_tex;
@@ -232,6 +232,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void post_process_surface(cgv::render::context& ctx);
 	void draw_baseline(cgv::render::context& ctx);
 	void draw_image_warp(cgv::render::context& ctx);
+	void draw_image_warp_closest(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
 	void draw_holes(cgv::render::context& ctx);
