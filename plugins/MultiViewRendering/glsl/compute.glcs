@@ -16,13 +16,16 @@ uniform float shear;
 
 void main()
 {  	
-	vec2 texcoord;
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
-	texcoord.x = float(global_coord.x)/(gl_NumWorkGroups.x);
-    texcoord.y = float(global_coord.y)/(gl_NumWorkGroups.y);
 
-	vec4 color = imageLoad(color_tex, texcoord);
-	float pt_depth = imageLoad(depth_tex, texcoord).r;
+	ivec2 dim = imageSize(color_tex);
+	
+	vec2 texcoord;
+	texcoord.x = global_coord.x/float(dim.x);
+    texcoord.y = global_coord.y/float(dim.y);
+
+	vec4 color = imageLoad(color_tex, global_coord);
+	float pt_depth = imageLoad(depth_tex, global_coord).r;
 	if (pt_depth > 1.0)
 		color.w = 0.0;
 
@@ -37,8 +40,9 @@ void main()
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
+	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w-1);
 
-	vec2 new_pos = vec2(0.5*(new_pos_clip.x/new_pos_clip.w-1)*gl_NumWorkGroups.x, global_coord.y);
+	ivec2 new_pos = ivec2(int(x_window * dim.x), global_coord.y);
 
 	imageStore(warped_tex, new_pos, color);
 }

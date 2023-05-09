@@ -1047,6 +1047,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	case MVM_BASELINE:
 	case MVM_WARPING:
 	case MVM_WARPING_CLOSEST:
+	case MVM_COMPUTE:
 		/////////////////////////////////////////////
 		/// --NOTE--
 		/// In quilt or volume mode, we want to spawn an additional render pass over all drawables for every
