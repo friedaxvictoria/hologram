@@ -1,0 +1,44 @@
+#version 460 core
+
+layout (local_size_x = 1, local_size_y = 1) in;
+
+layout(binding = 0, rgba32f) uniform readonly image2D color_tex;
+layout(binding = 1, rgba32f) uniform readonly image2D depth_tex;
+layout(binding = 2, rgba32f) uniform writeonly image2D warped_tex;
+
+uniform mat4 p_source;
+
+uniform vec4 eye_source;
+uniform vec4 eye_target;
+
+uniform float z_far;
+uniform float shear;
+
+void main()
+{  	
+	vec2 texcoord;
+	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
+	texcoord.x = float(global_coord.x)/(gl_NumWorkGroups.x);
+    texcoord.y = float(global_coord.y)/(gl_NumWorkGroups.y);
+
+	vec4 color = imageLoad(color_tex, texcoord);
+	float pt_depth = imageLoad(depth_tex, texcoord).r;
+	if (pt_depth > 1.0)
+		color.w = 0.0;
+
+	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*pt_depth-1, 1);
+	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
+
+	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
+	intersection_z_far.x = intersection_z_far.x - shear;
+
+	//direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
+
+	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
+
+	vec4 new_pos_clip = p_source * intersection_pt_depth;
+
+	vec2 new_pos = vec2(0.5*(new_pos_clip.x/new_pos_clip.w-1)*gl_NumWorkGroups.x, global_coord.y);
+
+	imageStore(warped_tex, new_pos, color);
+}

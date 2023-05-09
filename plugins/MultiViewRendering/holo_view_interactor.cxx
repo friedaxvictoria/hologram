@@ -185,7 +185,7 @@ void holo_view_interactor::timer_event(double t, double dt)
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
 	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
-	  volume_warp_depth_buffer("[D]")
+	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -975,6 +975,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!holes_shader.build_program(ctx, "holes.glpr", true))
 		return false;
+	if (!compute_shader.build_program(ctx, "compute.glpr", true))
+		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
@@ -1102,7 +1104,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	double aspect = (double)vp[2] / vp[3];
 
 	// compute the clipping planes based on the eye and scene extent
-	if ((vi < nr_render_views) || (multiview_mpx_mode != MVM_BASELINE && multiview_mpx_mode != MVM_WARPING && multiview_mpx_mode != MVM_WARPING_CLOSEST)) {
+	if ((vi < nr_render_views) || multiview_mpx_mode == MVM_BASIC) {
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
@@ -1377,6 +1379,50 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	}
 }
 
+void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
+
+	GLint vp[4];
+	glGetIntegerv(GL_VIEWPORT, vp);
+	double aspect = (double)vp[2] / vp[3];
+
+	texture &color_tex = *render_fbo[0].attachment_texture_ptr("color"),
+			&depth_tex = *render_fbo[0].attachment_texture_ptr("depth");
+
+	int color_tex_handle = (int&)color_tex.handle - 1;
+	int depth_tex_handle = (int&)depth_tex.handle - 1;
+	int compute_tex_handle;
+	if (holo_mpx_mode == HM_QUILT)
+		compute_tex_handle = (int&)quilt_holo_tex.handle - 1;
+	else
+		compute_tex_handle = (int&)volume_holo_tex.handle - 1;
+	glBindImageTexture(0, color_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, depth_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(2, compute_tex_handle, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+	vec3 shear_source = w_clip(inv(proj_source[0]) * vec4(1, 0, 1, 1));
+	vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
+	float shear = shear_target[0] - shear_source[0];
+
+	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+
+	compute_shader.enable(ctx);
+	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);
+	compute_shader.set_uniform(ctx, "eye_source", eye_source[0]);
+	compute_shader.set_uniform(ctx, "eye_target", eye_target);
+	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	compute_shader.set_uniform(ctx, "shear", shear);
+	compute_shader.set_uniform(ctx, "epsilon", epsilon);
+	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+	glDispatchCompute(vp[2], vp[3], 1);
+
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	compute_shader.disable(ctx);
+
+	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+}
+
 void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 {
 	GLint vp[4];
@@ -1424,6 +1470,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 					draw_baseline(ctx);
 				else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
 					draw_image_warp_closest(ctx);
+				else if (multiview_mpx_mode == MVM_COMPUTE)
+					warp_compute_shader(ctx);
 				else
 					draw_image_warp(ctx);
 
@@ -1470,6 +1518,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				draw_baseline(ctx);
 			else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
 				draw_image_warp_closest(ctx);
+			else if (multiview_mpx_mode == MVM_COMPUTE)
+				warp_compute_shader(ctx);
 			else
 				draw_image_warp(ctx);
 		}
@@ -1677,7 +1727,7 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping, warping to closest'");
+							   "enums='single view, basic view, baseline, warping, warping to closest, compute'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");

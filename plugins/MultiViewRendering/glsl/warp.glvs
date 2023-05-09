@@ -30,7 +30,7 @@ void main()
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 	intersection_z_far.x = intersection_z_far.x - shear;
 
-	direction_fs = normalize(eye_source.xyz/eye_source.w - pos_eye.xyz);
+	direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
 
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 

@@ -105,7 +105,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -151,7 +151,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, holes_shader, warping_shader;
+	cgv::render::shader_program baseline_shader, holes_shader, warping_shader, compute_shader;
+	cgv::render::texture compute_tex;
 	GPUgeometry heightmap, heightmap_warp;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
@@ -233,6 +234,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void draw_baseline(cgv::render::context& ctx);
 	void draw_image_warp(cgv::render::context& ctx);
 	void draw_image_warp_closest(cgv::render::context& ctx);
+	void warp_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
 	void draw_holes(cgv::render::context& ctx);
