@@ -1,4 +1,4 @@
-#version 460 core
+#version 460
 
 layout (local_size_x = 1, local_size_y = 1) in;
 
@@ -43,6 +43,11 @@ void main()
 	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w-1);
 
 	ivec2 new_pos = ivec2(int(x_window * dim.x), global_coord.y);
+
+	int depth = floatBitsToInt(pt_depth);
+	int point = (depth << 32) | int(packUnorm4x8(color));
+
+	//atomicMin(framebuffer[pixelID],point);
 
 	imageStore(warped_tex, new_pos, color);
 }

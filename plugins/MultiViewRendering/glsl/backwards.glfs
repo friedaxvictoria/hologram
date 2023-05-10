@@ -1,0 +1,65 @@
+#version 460 core
+
+in vec2 texcoord_fs;
+
+uniform sampler2D color_tex;
+uniform sampler2D depth_tex;
+
+uniform mat4 p_source;
+
+uniform vec4 eye_source;
+uniform vec4 eye_target;
+
+uniform float z_far;
+uniform float shear;
+
+out vec4 color;
+
+
+void main()
+{
+	float pt_depth = textureLod(depth_tex, texcoord_fs, 0).r;
+	if (pt_depth>1.0)
+		discard;
+
+	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord_fs.s-1, 2*texcoord_fs.t-1, 2*pt_depth-1, 1.0);
+	pt_eye_coord = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1.0);
+
+	vec4 intersection_z_far = eye_source + (eye_source - pt_eye_coord) * z_far / pt_eye_coord.z;		
+	intersection_z_far.x = intersection_z_far.x+shear;
+
+	vec4 ray = eye_target-intersection_z_far;
+
+	vec4 ray_offset = ray / 30.0;
+	vec4 curr_ray_pt = eye_target;
+	vec2 new_texcoord = texcoord_fs;
+	vec2 prev_texcoord;
+	float new_depth = 1.0;
+	float curr_layer_depth = 0.0;
+	float layer_offset = 1/30.0;
+	float ndc;
+	vec4 curr_ray_pt_clip;
+
+	while(curr_layer_depth < new_depth){
+		curr_ray_pt -= ray_offset;
+		curr_ray_pt_clip = p_source * curr_ray_pt;
+		ndc = curr_ray_pt_clip.x/curr_ray_pt_clip.w;
+		prev_texcoord = new_texcoord;
+		new_texcoord = vec2(0.5*(ndc+1), texcoord_fs.t);
+		new_depth = textureLod(depth_tex, new_texcoord, 0).r;  
+		curr_layer_depth += layer_offset;  
+	}
+
+	float after_intersection  = new_depth - curr_layer_depth;
+	float before_intersection = texture(depth_tex, prev_texcoord).r - curr_layer_depth + layer_offset;
+ 
+	float weight = after_intersection / (after_intersection - before_intersection);
+	new_texcoord = prev_texcoord * weight + new_texcoord * (1.0 - weight);
+
+	if(new_texcoord.x > 1.0 || new_texcoord.y > 1.0 || new_texcoord.x < 0.0 || new_texcoord.y < 0.0)
+		discard;
+
+	color = textureLod(color_tex, new_texcoord, 0);
+	
+	gl_FragDepth = 2*new_depth-1;
+}

@@ -105,7 +105,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE, MVM_BACKWARDS};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -151,7 +151,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, holes_shader, warping_shader, compute_shader;
+	cgv::render::shader_program baseline_shader, holes_shader, warping_shader, compute_shader, backwards_shader;
 	cgv::render::texture compute_tex;
 	GPUgeometry heightmap, heightmap_warp;
 
@@ -231,6 +231,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void enable_surface(cgv::render::context& ctx);
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
+	void draw_backwards(cgv::render::context& ctx);
 	void draw_baseline(cgv::render::context& ctx);
 	void draw_image_warp(cgv::render::context& ctx);
 	void draw_image_warp_closest(cgv::render::context& ctx);

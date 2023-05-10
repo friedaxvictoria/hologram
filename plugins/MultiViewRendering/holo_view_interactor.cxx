@@ -977,6 +977,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!compute_shader.build_program(ctx, "compute.glpr", true))
 		return false;
+	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
+		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
@@ -1048,6 +1050,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	case MVM_WARPING:
 	case MVM_WARPING_CLOSEST:
 	case MVM_COMPUTE:
+	case MVM_BACKWARDS:
 		/////////////////////////////////////////////
 		/// --NOTE--
 		/// In quilt or volume mode, we want to spawn an additional render pass over all drawables for every
@@ -1294,7 +1297,75 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 	}
 }
 
-// Iterate once over all rendered views to generate one holo view with the image warping approach
+// Iterate once over all rendered views to generate one holo view with the baseline approach
+void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
+{
+	GLint vp[4];
+	glGetIntegerv(GL_VIEWPORT, vp);
+	double aspect = (double)vp[2] / vp[3];
+
+	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+
+	for (unsigned int i = 0; i < nr_render_views; i++) {
+		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
+				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+		vec3 shear_source = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
+		vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
+		float shear = shear_target[0] - shear_source[0];
+
+		color_tex.enable(ctx, 0);
+		backwards_shader.set_uniform(ctx, "color_tex", 0);
+		depth_tex.enable(ctx, 1);
+		backwards_shader.set_uniform(ctx, "depth_tex", 1);
+
+		backwards_shader.set_uniform(ctx, "p_source", proj_source[i]);
+		backwards_shader.set_uniform(ctx, "eye_source", eye_source[i]);
+		backwards_shader.set_uniform(ctx, "eye_target", eye_target);
+		backwards_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+		backwards_shader.set_uniform(ctx, "shear", shear);
+
+		/* vec4 pt_eye_coord = inv(proj_source[i]) * vec4(2 * 0.6 - 1, 2 * 0.7 - 1, 2 * 0.4 - 1, 1);
+		pt_eye_coord = vec4(w_clip(pt_eye_coord), 1);
+
+		vec4 intersection_z_far = eye_source[i] + (eye_source[i] - pt_eye_coord) * z_far_derived / pt_eye_coord[2];
+
+		vec4 ray = eye_target - intersection_z_far;
+
+		vec3 ray_offset = vec3(ray[0], ray[1], ray[2]) / 15.0;
+		vec3 curr_ray_pt = eye_target;
+		vec2 new_texcoord = vec2(0.6, 0.7), prev_texcoord;
+		float new_depth = 0.4;
+		float curr_layer_depth = 0.0;
+		float layer_offset = 1 / 15.0;
+
+		while (curr_layer_depth < new_depth) {
+			curr_ray_pt -= ray_offset;
+			vec4 curr_ray_pt_clip = proj_source[i] * vec4(intersection_z_far);
+			vec3 clipped = w_clip(curr_ray_pt_clip);
+			prev_texcoord = new_texcoord;
+			new_texcoord = vec2(0.5 * (clipped[0] + 1), 0.5 * (clipped[1] + 1));
+			//new_depth = textureLod(depth_tex, new_texcoord, 0).r;
+			curr_layer_depth += layer_offset;
+		}
+
+		float after_intersection = new_depth - curr_layer_depth;
+		float before_intersection = 0.4 - curr_layer_depth + layer_offset;
+
+		float weight = after_intersection / (after_intersection - before_intersection);
+		new_texcoord = prev_texcoord * weight + new_texcoord * (1.0 - weight);*/
+
+		backwards_shader.enable(ctx);
+		glDisable(GL_CULL_FACE);
+		heightmap.draw(ctx);
+		glEnable(GL_CULL_FACE);
+		backwards_shader.disable(ctx);
+		color_tex.disable(ctx);
+		depth_tex.disable(ctx);
+	}
+}
+
+// Generate one holo view with the image warping approach by warping the closest of the rendered views
 void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 {
 	GLint vp[4];
@@ -1473,6 +1544,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 					draw_image_warp_closest(ctx);
 				else if (multiview_mpx_mode == MVM_COMPUTE)
 					warp_compute_shader(ctx);
+				else if (multiview_mpx_mode == MVM_BACKWARDS)
+					draw_backwards(ctx);
 				else
 					draw_image_warp(ctx);
 
@@ -1521,6 +1594,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				draw_image_warp_closest(ctx);
 			else if (multiview_mpx_mode == MVM_COMPUTE)
 				warp_compute_shader(ctx);
+			else if (multiview_mpx_mode == MVM_BACKWARDS)
+				draw_backwards(ctx);
 			else
 				draw_image_warp(ctx);
 		}
@@ -1728,7 +1803,7 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping, warping to closest, compute'");
+							   "enums='single view, basic view, baseline, warping, warping to closest, compute, backwards'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
