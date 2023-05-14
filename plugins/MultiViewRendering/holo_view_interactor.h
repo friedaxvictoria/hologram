@@ -105,7 +105,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE, MVM_BACKWARDS};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE, MVM_BACKWARDS, MVM_GEOMETRY};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:

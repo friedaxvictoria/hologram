@@ -42,7 +42,7 @@ class mesh_viewer :
 	float fac = 0.00001;
 	std::string mesh_filename;
 	mesh_type M;
-	cgv::render::mesh_render_info mesh_info, mesh_for_holes_info;
+	cgv::render::mesh_render_info mesh_info, mesh_for_geo_info, mesh_for_holes_info;
 	cgv::render::box3 M_bbox;
 	cgv::render::box_wire_render_data<> M_bbox_rd;
 	bool meshfile_supplies_colors, invent_missing_colors = false;
@@ -91,6 +91,7 @@ class mesh_viewer :
 		shader_program baseline_shader; // the mesh-based baseline approach
 		shader_program holes_shader;	// for displaying the holes
 		shader_program warp_shader;		// the image warping approach
+		shader_program geometry_shader;		// the image warping approach
 
 		// image warping shader parameters
 		bool prune_heightmap =
@@ -145,6 +146,9 @@ class mesh_viewer :
 		bool init(context& ctx);
 		void clear(context& ctx);
 		void init_frame(context& ctx);
+		void draw_holes(context& ctx);
+		void draw_geometry_shader(context& ctx, float zero_parallax, float eye_distance, int eye,
+											   float eye_offset);
 		void draw_surface(context& ctx, bool opaque_part);
 		void draw(context& ctx);
 		void finish_frame(context& ctx);

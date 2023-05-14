@@ -1046,6 +1046,54 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 		}
 		break;
+	case MVM_GEOMETRY:
+		if (initiate_render_pass_recursion(ctx)) {
+			enable_surface(ctx);
+			last_do_viewport_splitting = do_viewport_splitting;
+			last_nr_viewport_columns = nr_viewport_columns;
+			last_nr_viewport_rows = nr_viewport_rows;
+			if (holo_mpx_mode == HM_QUILT) {
+				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+				vi = 0;
+				for (quilt_row = 0; quilt_row < quilt_nr_rows; quilt_row+4) {
+					for (quilt_col = 0; quilt_col < quilt_nr_cols; quilt_col+4) {
+
+						volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+						//mesh.draw_geometry_shader(ctx, get_parallax_zero_depth(), eye_distance, vi,
+						//						  1 / (float)nr_holo_views);
+						//perform_render_pass(ctx, vi, RP_STEREO);
+						if (vi + 4 >= nr_holo_views)
+							break;
+						else
+							vi += 4;
+					}
+					if (vi >= nr_holo_views)
+						break;
+				}
+			}
+			else {
+				for (vi = 0; vi < nr_holo_views; vi+4) {
+					volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
+					glClear(GL_DEPTH_BUFFER_BIT);
+					//mesh.draw_geometry_shader(ctx, get_parallax_zero_depth(), eye_distance, vi,
+					//						  1 / (float)nr_holo_views);
+					//perform_render_pass(ctx, vi, RP_STEREO);
+				}
+			}
+			initiate_terminal_render_pass(nr_holo_views - 1);
+		}
+		if (!multi_pass_ignore_finish(ctx)) {
+			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+			if (holo_mpx_mode == HM_QUILT) {
+				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
+				glViewport(vp[0], vp[1], vp[2], vp[3]);
+				glScissor(vp[0], vp[1], vp[2], vp[3]);
+				glEnable(GL_SCISSOR_TEST);
+			}
+		}
+		break;
 	case MVM_BASELINE:
 	case MVM_WARPING:
 	case MVM_WARPING_CLOSEST:
@@ -1108,18 +1156,18 @@ void holo_view_interactor::init_frame(context& ctx)
 	double aspect = (double)vp[2] / vp[3];
 
 	// compute the clipping planes based on the eye and scene extent
-	if ((vi < nr_render_views) || multiview_mpx_mode == MVM_BASIC) {
+	if ((vi < nr_render_views) || multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
 		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 		if (rpf & RPF_SET_PROJECTION) {
 			gl_set_projection_matrix(ctx, current_e, aspect);
-			if (multiview_mpx_mode != MVM_BASIC) {
+			if (multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
 				proj_source[vi] = ctx.get_projection_matrix();
 			}
 		}
 
 		if (rpf & RPF_SET_MODELVIEW) {
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-			if (multiview_mpx_mode != MVM_BASIC) {
+			if (multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
 				modelview_source[vi] = ctx.get_modelview_matrix();
 				eye_source[vi] = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 			}
@@ -1141,7 +1189,7 @@ void holo_view_interactor::init_frame(context& ctx)
 /// this method is called in one pass over all drawables after finish frame
 void holo_view_interactor::after_finish(cgv::render::context& ctx)
 {
-	if (multiview_mpx_mode == MVM_BASIC) {
+	if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
 		if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
 			disable_surface(ctx);
 			glScissor(0, 0, ctx.get_width(), ctx.get_height());
@@ -1529,16 +1577,23 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				if (show_holes)
 					draw_holes(ctx);
 
-				if (multiview_mpx_mode == MVM_BASELINE)
+				switch (multiview_mpx_mode) {
+				case MVM_BASELINE:
 					draw_baseline(ctx);
-				else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
+					break;
+				case MVM_WARPING_CLOSEST:
 					draw_image_warp_closest(ctx);
-				else if (multiview_mpx_mode == MVM_COMPUTE)
+					break;
+				case MVM_COMPUTE:
 					warp_compute_shader(ctx);
-				else if (multiview_mpx_mode == MVM_BACKWARDS)
+					break;
+				case MVM_BACKWARDS:
 					draw_backwards(ctx);
-				else
+					break;
+				case MVM_WARPING:
 					draw_image_warp(ctx);
+					break;
+				}
 
 				if (++vi == nr_holo_views)
 					break;
@@ -1579,16 +1634,24 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 
 			if (show_holes)
 				draw_holes(ctx);
-			if (multiview_mpx_mode == MVM_BASELINE)
+			
+			switch (multiview_mpx_mode) {
+			case MVM_BASELINE:
 				draw_baseline(ctx);
-			else if (multiview_mpx_mode == MVM_WARPING_CLOSEST)
+				break;
+			case MVM_WARPING_CLOSEST:
 				draw_image_warp_closest(ctx);
-			else if (multiview_mpx_mode == MVM_COMPUTE)
+				break;
+			case MVM_COMPUTE:
 				warp_compute_shader(ctx);
-			else if (multiview_mpx_mode == MVM_BACKWARDS)
+				break;
+			case MVM_BACKWARDS:
 				draw_backwards(ctx);
-			else
+				break;
+			case MVM_WARPING:
 				draw_image_warp(ctx);
+				break;
+			}
 		}
 		volume_warp_fbo.pop_viewport(ctx);
 		volume_warp_fbo.disable(ctx);
@@ -1633,14 +1696,14 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			prog.set_uniform(ctx, "quilt_width", quilt_width);
 			prog.set_uniform(ctx, "quilt_height", quilt_height);
 			prog.set_uniform(ctx, "quilt_interpolate", quilt_interpolate);
-			if (multiview_mpx_mode == MVM_BASIC)
+			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
 				quilt_render_tex.enable(ctx, 0);
 			else
 				quilt_holo_tex.enable(ctx, 0);
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
-			if (multiview_mpx_mode == MVM_BASIC)
+			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
 				volume_render_tex.enable(ctx, 0);
 			else
 				volume_holo_tex.enable(ctx, 0);
@@ -1677,13 +1740,13 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 
 	else {
 		if (holo_mpx_mode == HM_QUILT) {
-			if (multiview_mpx_mode == MVM_BASIC)
+			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
 				quilt_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 			else
 				quilt_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
 		else {
-			if (multiview_mpx_mode == MVM_BASIC) {
+			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
 				volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
 				volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 			}
@@ -1794,7 +1857,7 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping, warping to closest, compute, backwards'");
+							   "enums='single view, basic view, baseline, warping, warp from closest, compute, backwards, geometry'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");

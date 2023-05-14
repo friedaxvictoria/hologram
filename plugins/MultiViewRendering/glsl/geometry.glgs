@@ -50,8 +50,8 @@ void main()
 
 		gl_Position = curr_proj * gl_in[i].gl_Position;
 
-		gl_Layer = eye;
-		gl_ViewportIndex = eye;
+		gl_Layer = eye + gl_InvocationID;
+		gl_ViewportIndex = eye + gl_InvocationID;
 
 		EmitVertex();
 	}
