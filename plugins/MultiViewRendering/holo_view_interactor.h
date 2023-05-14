@@ -164,6 +164,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
 	//reference to mesh_viewer
 	cgv::render::drawable* mesh_drawable = nullptr;
+	//mesh_viewer mesh;
 
 	std::chrono::steady_clock::time_point time_start, time_end;
 

@@ -25,6 +25,7 @@
 #include <cgv/render/clipped_view.h>
 #include "tessellator.h"
 #include "utilities.h"
+#include "mesh.h"
 
 using namespace cgv::base;
 using namespace cgv::signal;
@@ -80,123 +81,15 @@ in the examples plugin. More image formats are provided by the the cmi_devIL plu
 only part of the cgv_support project tree available on demand.
 */
 
-class mesh_viewer : public node, public drawable, public provider, public event_handler
-{
-  public:
-	typedef cgv::math::fvec<float, 3> vec3;
-	typedef cgv::math::fvec<double, 3> dvec3;
-	typedef cgv::math::fmat<double, 3, 3> dmat3;
-	typedef cgv::math::fmat<double, 4, 4> dmat4;
-	typedef cgv::media::mesh::simple_mesh<float> mesh_type;
-	typedef mesh_type::idx_type idx_type;
-	typedef mesh_type::vec3i vec3i;
-
-  protected:
-
-	float fac = 0.00001;
-	std::string mesh_filename;
-	mesh_type M;
-	cgv::render::mesh_render_info mesh_info, mesh_for_holes_info;
-	cgv::render::box3 M_bbox;
-	cgv::render::box_wire_render_data<> M_bbox_rd;
-	bool meshfile_supplies_colors, invent_missing_colors = false;
-
-	bool update_view_after_mesh_processed = false;
-
-	bool show_bbox = false;
-
-	bool show_surface = true;
-	CullingMode cull_mode;
-	ColorMapping color_mapping;
-	rgb surface_color;
-	IlluminationMode illumination_mode;
-
-	bool show_vertices = false;
-	sphere_render_style sphere_style;
-	attribute_array_manager sphere_aam;
-
-	bool show_wireframe = false;
-	cone_render_style cone_style;
-	attribute_array_manager cone_aam;
-
-	cgv::render::stereo_view* view = nullptr;
-
-	float eye_distance;
-
-	vec3 cam_dir;
-
-
-	////
-	// 3D Image Warp baseline testing fields
-
-	struct
-	{
-		enum WarpMode { BASELINE, IMAGE_WARP };
-		WarpMode warp_mode = IMAGE_WARP;
-
-		// Render targets for each fully rendered view - we allocate enough for 3 viewpoints:
-		// 0-left, 1-center, 2-right
-		cgv::render::managed_frame_buffer render_fbo[3];
-
-		// our base projection matrix
-		mat4 inv_mat_proj_render[3];
-		mat4 proj_for_render;
-
-		// image warping test shaders
-		shader_program baseline_shader; // the mesh-based baseline approach
-		shader_program holes_shader; // for displaying the holes
-		shader_program warp_shader;	// the image warping approach
-
-		// image warping shader parameters
-		bool prune_heightmap =
-			  true; // discard heightmap fragments which don't represent valid geometry (from "empty" areas)
-		float heightmap_oversampling =
-			  2.f; // oversampling factor of the heightmap (to be able to resolve finer details)
-
-		// Mesh for the heightmap geometry (actually the same for all three views,
-		// since the topology never changes!)
-		GPUgeometry heightmap_baseline, heightmap_warp;
-
-		// transformation matrix for positioning the heightmap at the plane behind the scene from
-		// which it was shot
-		mat4 heightmap_trans;
-		mat4 modelview_source;
-
-		// whether to render the heightmap
-		bool render_heightmap = false;
-
-		// indicates that a snapshot of the current view should be safed in the heightmap
-		bool shoot_heightmap;
-
-		int visible_view = 22;
-
-		int nr_renders = 3;
-		float render_offset[3];
-
-		bool show_holes = true;
-		bool with_interpolated_holes = false;
-		bool nr_rendered_views_changed = false;
-
-		float epsilon = 0.02;
-
-		bool ortho = false;
-
-		float x_ext, y_ext, znear;
-		vec3 eye_source[3], eye_target;
-
-		mat3 p_1[3];
-	} test;
-
-  public:
 	/// the constructor
-	mesh_viewer() : node("mesh_viewer")
+	mesh_viewer::mesh_viewer() : node("mesh_viewer")
 	{
 		cull_mode = CM_BACKFACE;
 		color_mapping = cgv::render::CM_COLOR;
 		surface_color = rgb(0.75f, 0.25f, 1.0f);
 		illumination_mode = IM_ONE_SIDED;
 
-		sphere_style.surface_color = rgb(0.8f, 0.3f, 0.3f);
+		//sphere_style.surface_color = rgb(0.8f, 0.3f, 0.3f);
 		cone_style.surface_color = rgb(0.6f, 0.5f, 0.4f);
 
 		eye_distance = 0.3f;
@@ -205,10 +98,10 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// reflect the name of our class
-	std::string get_type_name() const { return "mesh_viewer"; }
+	std::string mesh_viewer::get_type_name() const { return "mesh_viewer"; }
 
 	/// called when an instance of this class is registered with the Framework
-	void on_register()
+	void mesh_viewer::on_register()
 	{
 		// --NOTE-- obviously, a window can only have one title, so it should be 
 		//  in the most central, "main"
@@ -218,7 +111,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// helper function that acts as a single point where processing of the mesh into a renderable form is happening
-	void process_mesh_for_rendering(context& ctx, bool update_view = true)
+	void mesh_viewer::process_mesh_for_rendering(context& ctx, bool update_view = true)
 	{
 		// adjust size of vertex and edge glyphs to loaded mesh
 		sphere_style.radius = float(0.05 * sqrt(M.compute_box().get_extent().sqr_length() / M.get_nr_positions()));
@@ -278,7 +171,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// helper function that will make sure we have a per-vertex color attribute
-	void ensure_mesh_colors()
+	void mesh_viewer::ensure_mesh_colors()
 	{
 		if (M.has_colors())
 			return;
@@ -292,7 +185,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// react to mouse & keyboard events
-	bool handle(cgv::gui::event& e)
+	bool mesh_viewer::handle(cgv::gui::event& e)
 	{
 		if (e.get_kind() == cgv::gui::EID_KEY) {
 			const auto& ke = static_cast<cgv::gui::key_event&>(e);
@@ -314,7 +207,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// output help text for keyboard shortcuts
-	void stream_help(std::ostream& os)
+	void mesh_viewer::stream_help(std::ostream& os)
 	{
 		os << "mesh_viewer:" << std::endl
 		   << "\ttoggle mesh surface[s], toggle mesh vertices[v], toggle mesh wireframe[w]," << std::endl
@@ -323,7 +216,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// react to our class fields being set via the GUI or via reflection (e.g. from a config file)
-	void on_set(void* member_ptr)
+	void mesh_viewer::on_set(void* member_ptr)
 	{
 		if (member_ptr == &mesh_filename) {
 			mesh_type tmp;
@@ -353,7 +246,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// clears whatever mesh is currently loaded an creates a Conway polyhedron instead
-	void create_conway_polyhedron()
+	void mesh_viewer::create_conway_polyhedron()
 	{
 		M.clear();
 		M.construct_conway_polyhedron("dtI");
@@ -363,7 +256,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 	/// perform initialization that can not be done in the constructor as it requires a fully functional
 	/// graphics context
-	bool init(context& ctx)
+	bool mesh_viewer::init(context& ctx)
 	{
 		// init render components
 		ref_sphere_renderer(ctx, 1);
@@ -397,7 +290,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// unload any currently loaded mesh data
-	void clear(context& ctx)
+	void mesh_viewer::clear(context& ctx)
 	{
 		M_bbox_rd.destruct(ctx);
 		ref_cone_renderer(ctx, -1);
@@ -408,7 +301,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 	/// perform any kind of operation that should take place before all drawables start executing their ::draw()
 	/// methods
-	void init_frame(context& ctx)
+	void mesh_viewer::init_frame(context& ctx)
 	{
 		////
 		// SECTION: 3D image warping baseline test
@@ -447,7 +340,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// draw the mesh surface
-	void draw_surface(context& ctx, bool opaque_part)
+	void mesh_viewer::draw_surface(context& ctx, bool opaque_part)
 	{
 		// remember current culling setting
 		GLboolean is_culling = glIsEnabled(GL_CULL_FACE);
@@ -489,7 +382,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	/// the "main" draw method
-	void draw(context& ctx)
+	void mesh_viewer::draw(context& ctx)
 	{
 		////
 		// SECTION: 3D image warping baseline test
@@ -707,7 +600,8 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 			}
 		} */
 
-		if (show_vertices) {
+		if (show_vertices)
+		{
 			sphere_renderer& sr = ref_sphere_renderer(ctx);
 			sr.set_render_style(sphere_style);
 			sr.enable_attribute_array_manager(ctx, sphere_aam);
@@ -734,26 +628,16 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		////
 	}
 
-	mat3 compute_frustum_model_image_warp(float r, float l, float b, float t, float w, float h, float n) { mat3 p;
-		p.zeros();
-		p(0, 0) = (r - l) / w;
-		p(0, 2) = l;
-		p(1, 1) = (b - t) / h;
-		p(1, 2) = r;
-		p(2, 2) = n;
-		return p;
-	}
-
 	/// perform any kind of operation that should take place after all drawables have executed their ::draw()
 	/// methods
-	void finish_frame(context& ctx)
+	void mesh_viewer::finish_frame(context& ctx)
 	{
 		if (show_surface)
 			draw_surface(ctx, false); // --NOTE-- uncomment once done testing the image warp to re-enable correct handling of transparent mesh parts
 	}
 
 	/// reflects all our class fields that we want to be settable via config file
-	bool self_reflect(cgv::reflect::reflection_handler& srh)
+	bool mesh_viewer::self_reflect(cgv::reflect::reflection_handler& srh)
 	{
 		return srh.reflect_member("mesh_filename", mesh_filename) &&
 			   srh.reflect_member("invent_missing_colors", invent_missing_colors) &&
@@ -773,13 +657,13 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 
 	/// define all GUI elements for our mesh viewer
 	// - helper one-shot methods needed as button callbacks (until the framework properly supports C++ lambdas)
-	void on_shoot(void)
+	void mesh_viewer::on_shoot(void)
 	{
 		test.shoot_heightmap = true;
 		post_redraw();
 	}
 
-	void nr_rendered_views_change(void) { 
+	void mesh_viewer::nr_rendered_views_change(void) { 
 		test.nr_rendered_views_changed = true;
 		test.render_offset[1] = -1.0;
 		test.render_offset[2] = 1.0;
@@ -793,7 +677,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 	}
 
 	// - the actual method
-	void create_gui()
+	void mesh_viewer::create_gui()
 	{
 		add_decorator("Mesh", "heading", "level=2");
 		add_member_control(this, "invent missing per-vertex colors", invent_missing_colors, "check",
@@ -897,7 +781,7 @@ class mesh_viewer : public node, public drawable, public provider, public event_
 		// END: 3D image warping baseline test
 		////
 	}
-};
+
 
 /// register the mesh_viewer drawable
 #include <cgv/base/register.h>
