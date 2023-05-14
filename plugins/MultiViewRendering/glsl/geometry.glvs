@@ -1,0 +1,41 @@
+#version 330
+
+uniform mat4 texture_matrix = mat4(
+	vec4(1.0, 0.0, 0.0, 0.0), 
+	vec4(0.0, 1.0, 0.0, 0.0), 
+	vec4(0.0, 0.0, 1.0, 0.0), 
+	vec4(0.0, 0.0, 0.0, 1.0) 
+);
+
+uniform bool use_texture_matrix = false;
+
+//***** begin interface of view.glsl ***********************************
+mat4 get_modelview_matrix();
+mat3 get_normal_matrix();
+//***** end interface of view.glsl ***********************************
+
+layout(location = 0) in vec4 position;
+layout(location = 1) in vec4 color;
+layout(location = 2) in vec3 normal;
+layout(location = 3) in vec2 texcoord;
+
+out VS_OUT {
+     vec3 normal_eye_gs;
+	 vec3 position_eye_gs;
+	 vec4 color_gs;
+	 vec2 texcoord_gs;
+} vs_out;
+
+void main()
+{
+	gl_Position = get_modelview_matrix()*position;
+	vs_out.position_eye_gs = gl_Position.xyz / gl_Position.w;
+	vs_out.color_gs = color;
+	vs_out.normal_eye_gs = get_normal_matrix()*normal;
+	if (use_texture_matrix) {
+		vec4 ht = texture_matrix * vec4(texcoord, 0.0, 1.0);
+		vs_out.texcoord_gs = ht.xy / ht.w;
+	}
+	else
+		vs_out.texcoord_gs = texcoord;
+}

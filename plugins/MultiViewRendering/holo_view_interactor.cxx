@@ -1310,9 +1310,9 @@ void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
 
-		vec3 shear_source = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
-		vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
-		float shear = shear_target[0] - shear_source[0];
+		float shear = (eye_target[0] - eye_source[i][0]) * (get_parallax_zero_depth() - z_far_derived) /
+					  get_parallax_zero_depth();
+
 
 		color_tex.enable(ctx, 0);
 		backwards_shader.set_uniform(ctx, "color_tex", 0);
@@ -1325,17 +1325,17 @@ void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
 		backwards_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 		backwards_shader.set_uniform(ctx, "shear", shear);
 
-		/* vec4 pt_eye_coord = inv(proj_source[i]) * vec4(2 * 0.6 - 1, 2 * 0.7 - 1, 2 * 0.4 - 1, 1);
+		vec4 pt_eye_coord = inv(proj_source[i]) * vec4(2 * 0.6 - 1, 2 * 0.7 - 1, 2 * 0.4 - 1, 1);
 		pt_eye_coord = vec4(w_clip(pt_eye_coord), 1);
 
 		vec4 intersection_z_far = eye_source[i] + (eye_source[i] - pt_eye_coord) * z_far_derived / pt_eye_coord[2];
 
 		vec4 ray = eye_target - intersection_z_far;
 
-		vec3 ray_offset = vec3(ray[0], ray[1], ray[2]) / 15.0;
-		vec3 curr_ray_pt = eye_target;
+		vec4 ray_offset = ray / 15.0;
+		vec4 curr_ray_pt = eye_target;
 		vec2 new_texcoord = vec2(0.6, 0.7), prev_texcoord;
-		float new_depth = 0.4;
+		float new_depth = 1.0;
 		float curr_layer_depth = 0.0;
 		float layer_offset = 1 / 15.0;
 
@@ -1344,16 +1344,10 @@ void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
 			vec4 curr_ray_pt_clip = proj_source[i] * vec4(intersection_z_far);
 			vec3 clipped = w_clip(curr_ray_pt_clip);
 			prev_texcoord = new_texcoord;
-			new_texcoord = vec2(0.5 * (clipped[0] + 1), 0.5 * (clipped[1] + 1));
+			new_texcoord = vec2(0.5 * (clipped[0] + 1), 0.7);
 			//new_depth = textureLod(depth_tex, new_texcoord, 0).r;
 			curr_layer_depth += layer_offset;
 		}
-
-		float after_intersection = new_depth - curr_layer_depth;
-		float before_intersection = 0.4 - curr_layer_depth + layer_offset;
-
-		float weight = after_intersection / (after_intersection - before_intersection);
-		new_texcoord = prev_texcoord * weight + new_texcoord * (1.0 - weight);*/
 
 		backwards_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
@@ -1385,9 +1379,8 @@ void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 	texture &color_tex = *render_fbo[source_idx].attachment_texture_ptr("color"),
 			&depth_tex = *render_fbo[source_idx].attachment_texture_ptr("depth");
 
-	vec3 shear_source = w_clip(inv(proj_source[source_idx]) * vec4(1, 0, 1, 1));
-	vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
-	float shear = shear_target[0] - shear_source[0];
+	float shear = (eye_target[0] - eye_source[source_idx][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
+
 
 	color_tex.enable(ctx, 0);
 	warping_shader.set_uniform(ctx, "color_tex", 0);
@@ -1424,9 +1417,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
 
-		vec3 shear_source = w_clip(inv(proj_source[i]) * vec4(1, 0, 1, 1));
-		vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
-		float shear = shear_target[0] - shear_source[0];
+		float shear = (eye_target[0] - eye_source[i][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
@@ -1471,11 +1462,11 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 	glBindImageTexture(1, depth_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
 	glBindImageTexture(2, compute_tex_handle, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	vec3 shear_source = w_clip(inv(proj_source[0]) * vec4(1, 0, 1, 1));
-	vec3 shear_target = w_clip(inv(ctx.get_projection_matrix()) * vec4(1, 0, 1, 1));
-	float shear = shear_target[0] - shear_source[0];
-
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+
+	float shear =
+		  (eye_target[0] - eye_source[0][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
+
 
 	compute_shader.enable(ctx);
 	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);

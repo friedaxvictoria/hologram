@@ -1,0 +1,59 @@
+#version 460 core
+
+in VS_OUT {
+     vec3 normal_eye_gs;
+	 vec3 position_eye_gs;
+	 vec4 color_gs;
+	 vec2 texcoord_gs;
+} gs_in[]; 
+
+layout (triangles, invocations = 4) in;
+layout (triangle_strip, max_vertices = 3) out;
+
+//how far are stereo eyes apart from one another
+uniform float eye_sep;
+//index of the first view position for this geometry shader call
+uniform int eye;
+//how far is one eye away from the next --> depends on amount of views
+uniform float eye_offset;
+uniform float zero_parallax;
+
+out vec3 normal_eye;
+out vec3 position_eye;
+out vec4 color_fs;
+out vec2 texcoord_fs;
+
+out int gl_Layer;
+out int gl_ViewportIndex;
+
+//***** begin interface of view.glsl ***********************************
+mat4 get_projection_matrix();
+//***** end interface of view.glsl ***********************************
+
+mat4 get_proj(){
+	mat4 p = get_projection_matrix();
+	p[0][2] = - eye_sep * (eye + gl_InvocationID) * eye_offset;
+	p[0][3] = - zero_parallax * eye_sep * (eye + gl_InvocationID) * eye_offset;
+	return p;
+}
+
+
+void main()
+{
+	mat4 curr_proj = get_proj();
+
+	for (int i = 0; i<3; i++){
+		normal_eye = gs_in[i].normal_eye_gs;
+		position_eye = gs_in[i].position_eye_gs;
+		color_fs = gs_in[i].color_gs;
+		texcoord_fs = gs_in[i].texcoord_gs;
+
+		gl_Position = curr_proj * gl_in[i].gl_Position;
+
+		gl_Layer = eye;
+		gl_ViewportIndex = eye;
+
+		EmitVertex();
+	}
+	EndPrimitive(); 
+}
