@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mesh.h"
 #include <cgv/base/base.h>
 #include <cgv/render/drawable.h>
 #include <cgv/render/stereo_view.h>
@@ -151,7 +152,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, holes_shader, warping_shader, compute_shader, backwards_shader;
+	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader;
 	cgv::render::texture compute_tex;
 	GPUgeometry heightmap, heightmap_warp;
 
@@ -163,8 +164,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	vec4 eye_source[3];
 
 	//reference to mesh_viewer
-	cgv::render::drawable* mesh_drawable = nullptr;
-	//mesh_viewer mesh;
+	mesh_viewer* mesh = nullptr;
 
 	std::chrono::steady_clock::time_point time_start, time_end;
 
@@ -239,9 +239,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void warp_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
-	void draw_holes(cgv::render::context& ctx);
-
-	mat3 compute_frustum_model_image_warp(float r, float l, float b, float t, float w, float h, float n);
 
   public:
 	///

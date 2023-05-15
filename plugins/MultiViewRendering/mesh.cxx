@@ -349,8 +349,12 @@ void mesh_viewer::init_frame(context& ctx)
 void mesh_viewer::draw_holes(context& ctx)
 {
 	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+
 	mesh_for_holes_info.draw_all(ctx);
+
 	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void mesh_viewer::draw_geometry_shader(context& ctx, float zero_parallax, float eye_distance, int eye,
@@ -407,25 +411,18 @@ void mesh_viewer::draw_surface(context& ctx, bool opaque_part)
 	else
 		glDisable(GL_CULL_FACE);
 
-	if (ctx.get_current_program() == 0) {
-		// choose a shader program and configure it based on current settings
-		shader_program& prog = ctx.ref_surface_shader_program(true);
-		prog.set_uniform(ctx, "culling_mode", (int)cull_mode);
-		prog.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
-		prog.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
-		// set default surface color for color mapping which only affects
-		// rendering if mesh does not have per vertex colors and color_mapping is on
-		// prog.set_attribute(ctx, prog.get_color_index(), surface_color);
-		ctx.set_color(surface_color);
-		// render the mesh from the vertex buffers with selected program
-		mesh_info.draw_all(ctx, opaque_part, !opaque_part);
-	}
-
-	else {
-		glDisable(GL_CULL_FACE);
-		mesh_for_holes_info.draw_all(ctx);
-		glEnable(GL_CULL_FACE);
-	}
+	// choose a shader program and configure it based on current settings
+	shader_program& prog = ctx.ref_surface_shader_program(true);
+	prog.set_uniform(ctx, "culling_mode", (int)cull_mode);
+	prog.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
+	prog.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
+	// set default surface color for color mapping which only affects
+	// rendering if mesh does not have per vertex colors and color_mapping is on
+	// prog.set_attribute(ctx, prog.get_color_index(), surface_color);
+	ctx.set_color(surface_color);
+	// render the mesh from the vertex buffers with selected program
+	mesh_info.draw_all(ctx, opaque_part, !opaque_part);
+	
 	// recover opengl culling mode
 	if (is_culling)
 		glEnable(GL_CULL_FACE);

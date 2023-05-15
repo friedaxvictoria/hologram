@@ -973,8 +973,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!warping_shader.build_program(ctx, "warp.glpr", true))
 		return false;
-	if (!holes_shader.build_program(ctx, "holes.glpr", true))
-		return false;
 	if (!compute_shader.build_program(ctx, "compute.glpr", true))
 		return false;
 	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
@@ -993,8 +991,8 @@ void holo_view_interactor::init_frame(context& ctx)
 	quilt_width = view_width * quilt_nr_cols;
 	quilt_height = view_height * quilt_nr_rows;
 
-	if (!mesh_drawable)
-		mesh_drawable = &dynamic_cast<drawable&>(*cgv::base::find_object_by_name("mesh_viewer"));
+	if (!mesh)
+		mesh = &dynamic_cast<mesh_viewer&>(*cgv::base::find_object_by_name("mesh_viewer"));
 
 	// check mono rendering case
 	switch (multiview_mpx_mode) {
@@ -1158,8 +1156,6 @@ void holo_view_interactor::init_frame(context& ctx)
 
 	double aspect = (double)view_width / view_height;
 
-	std::cout << "in render: "<< aspect << std::endl;
-
 	// compute the clipping planes based on the eye and scene extent
 	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 	if (rpf & RPF_SET_PROJECTION) {
@@ -1308,17 +1304,6 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 		volume_fbo.disable(ctx);
 	}
 	glViewport(0, 0, ctx.get_width(), ctx.get_height());
-}
-
-void holo_view_interactor::draw_holes(cgv::render::context& ctx)
-{
-	holes_shader.enable(ctx);
-	glDisable(GL_DEPTH_TEST);
-
-	mesh_drawable->draw(ctx);
-
-	glEnable(GL_DEPTH_TEST);
-	holes_shader.disable(ctx);
 }
 
 // Iterate once over all rendered views to generate one holo view with the baseline approach
@@ -1532,8 +1517,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 {
 	double aspect = (double)view_width / view_height;
 
-	std::cout << "in warp: " << aspect << std::endl;
-
 	if (holo_mpx_mode == HM_QUILT) {
 		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
 			quilt_warp_fbo.get_height() != quilt_height)
@@ -1569,7 +1552,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
 				if (show_holes)
-					draw_holes(ctx);
+					mesh->draw_holes(ctx);
 
 				switch (multiview_mpx_mode) {
 				case MVM_BASELINE:
@@ -1627,7 +1610,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
 			if (show_holes)
-				draw_holes(ctx);
+				mesh->draw_holes(ctx);
 			
 			switch (multiview_mpx_mode) {
 			case MVM_BASELINE:
