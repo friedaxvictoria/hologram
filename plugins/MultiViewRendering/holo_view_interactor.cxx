@@ -1075,7 +1075,8 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 			else {
 				for (vi = 0; vi < nr_holo_views; vi+4) {
-					volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
+					//Attach 3d texture without anything else so that gl_Layer picks right layer??
+					volume_fbo.attach(ctx, volume_render_tex, 0, 0);
 					glClear(GL_DEPTH_BUFFER_BIT);
 					//mesh.draw_geometry_shader(ctx, get_parallax_zero_depth(), eye_distance, vi,
 					//						  1 / (float)nr_holo_views);
@@ -1088,7 +1089,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 			if (holo_mpx_mode == HM_QUILT) {
 				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
-				glViewport(vp[0], vp[1], vp[2], vp[3]);
+				glViewportIndexedf(vi, vp[0], vp[1], vp[2], vp[3]);
 				glScissor(vp[0], vp[1], vp[2], vp[3]);
 				glEnable(GL_SCISSOR_TEST);
 			}
@@ -1128,8 +1129,12 @@ void holo_view_interactor::init_frame(context& ctx)
 		/// scene fills the whole viewport, it will appear in 3D to be roughly the same physical real-world
 		/// size as the screen.
 		///
-		if (initiate_render_pass_recursion(ctx)) {
+		if (initiate_render_pass_recursion(ctx))
+		{
 			enable_warp_fb(ctx);
+			last_do_viewport_splitting = do_viewport_splitting;
+			last_nr_viewport_columns = nr_viewport_columns;
+			last_nr_viewport_rows = nr_viewport_rows;
 			vi = 0;
 			for (int i = 0; i < nr_render_views; i++) {
 				current_render_fbo = render_fbo[vi];
@@ -1142,7 +1147,6 @@ void holo_view_interactor::init_frame(context& ctx)
 
 				vi++;
 			}
-			// change to nr_render_views-1 later
 			initiate_terminal_render_pass(nr_render_views - 1);
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
@@ -1155,34 +1159,34 @@ void holo_view_interactor::init_frame(context& ctx)
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
 
+	std::cout << "in render: "<< aspect << std::endl;
+
 	// compute the clipping planes based on the eye and scene extent
-	if ((vi < nr_render_views) || multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
-		compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
-		if (rpf & RPF_SET_PROJECTION) {
-			gl_set_projection_matrix(ctx, current_e, aspect);
-			if (multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
-				proj_source[vi] = ctx.get_projection_matrix();
-			}
+	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
+	if (rpf & RPF_SET_PROJECTION) {
+		gl_set_projection_matrix(ctx, current_e, aspect);
+		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
+			proj_source[vi] = ctx.get_projection_matrix();
 		}
+	}
 
-		if (rpf & RPF_SET_MODELVIEW) {
-			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-			if (multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
-				modelview_source[vi] = ctx.get_modelview_matrix();
-				eye_source[vi] = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
-			}
+	if (rpf & RPF_SET_MODELVIEW) {
+		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
+		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
+			modelview_source[vi] = ctx.get_modelview_matrix();
+			eye_source[vi] = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 		}
+	}
 
-		if (current_e == GLSU_RIGHT) {
-			MPW_right = ctx.get_modelview_projection_window_matrix();
-			if (do_viewport_splitting)
-				MPWs_right = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW_right);
-		}
-		else {
-			MPW = ctx.get_modelview_projection_window_matrix();
-			if (do_viewport_splitting)
-				MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
-		}
+	if (current_e == GLSU_RIGHT) {
+		MPW_right = ctx.get_modelview_projection_window_matrix();
+		if (do_viewport_splitting)
+			MPWs_right = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW_right);
+	}
+	else {
+		MPW = ctx.get_modelview_projection_window_matrix();
+		if (do_viewport_splitting)
+			MPWs = std::vector<dmat4>(nr_viewport_rows * nr_viewport_columns, MPW);
 	}
 }
 
@@ -1200,7 +1204,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 	else {
 		if (multiview_mpx_mode != MVM_SINGLE && !multi_pass_ignore_finish(ctx)) {
 
-			if (multi_pass_terminate(ctx)) {
+			if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
 				// turn our up to 3 views into a quilt or hologram
 				compute_holo_views(ctx);
 				if (quilt_write_to_file) {
@@ -1539,6 +1543,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 	GLint vp[4];
 	glGetIntegerv(GL_VIEWPORT, vp);
 	double aspect = (double)vp[2] / vp[3];
+
+	std::cout << "in warp: " << aspect << std::endl;
 
 	if (holo_mpx_mode == HM_QUILT) {
 		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
