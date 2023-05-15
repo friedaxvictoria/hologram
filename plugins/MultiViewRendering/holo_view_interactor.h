@@ -21,8 +21,6 @@
 
 #include "lib_begin.h"
 #include "tessellator.h"
-#include "mesh.h"
-
 
 namespace cgv {
 namespace math {

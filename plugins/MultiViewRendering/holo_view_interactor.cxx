@@ -1139,6 +1139,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			for (int i = 0; i < nr_render_views; i++) {
 				current_render_fbo = render_fbo[vi];
 				current_render_fbo.enable(ctx);
+				current_render_fbo.ref_frame_buffer().push_viewport(ctx);
 				// make the heightmap quad very slightly visible even where it doesn't contain scene geometry
 				glClearColor(.03125f, .03125f, .03125f, 1.f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1155,9 +1156,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		break;
 	}
 
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	std::cout << "in render: "<< aspect << std::endl;
 
@@ -1201,22 +1200,20 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 			post_process_surface(ctx);
 		}
 	}
-	else {
-		if (multiview_mpx_mode != MVM_SINGLE && !multi_pass_ignore_finish(ctx)) {
-
-			if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
-				// turn our up to 3 views into a quilt or hologram
-				compute_holo_views(ctx);
-				if (quilt_write_to_file) {
-					quilt_holo_tex.write_to_file(ctx, "quilt.png");
-					quilt_write_to_file = false;
-					on_set(&quilt_write_to_file);
-				}
-				post_process_surface(ctx);
+	else if(multiview_mpx_mode != MVM_SINGLE){
+		if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
+			// turn our up to 3 views into a quilt or hologram
+			compute_holo_views(ctx);
+			if (quilt_write_to_file) {
+				quilt_holo_tex.write_to_file(ctx, "quilt.png");
+				quilt_write_to_file = false;
+				on_set(&quilt_write_to_file);
 			}
-			else {
-				current_render_fbo.disable(ctx);
-			}
+			post_process_surface(ctx);
+		}
+		else{
+			current_render_fbo.ref_frame_buffer().pop_viewport(ctx);
+			current_render_fbo.disable(ctx);
 		}
 	}
 	if (multi_pass_terminate(ctx)) {
@@ -1338,6 +1335,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 
 		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(proj_source[i] * modelview_source[i]));
 		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
+		baseline_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
 		baseline_shader.enable(ctx);
 		glDisable(GL_CULL_FACE);
@@ -1352,9 +1350,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 // Iterate once over all rendered views to generate one holo view with the baseline approach
 void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
 {
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
@@ -1414,9 +1410,7 @@ void holo_view_interactor::draw_backwards(cgv::render::context& ctx)
 // Generate one holo view with the image warping approach by warping the closest of the rendered views
 void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 {
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
@@ -1459,9 +1453,7 @@ void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 // Iterate once over all rendered views to generate one holo view with the image warping approach
 void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 {
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
@@ -1496,9 +1488,7 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 
 void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	texture &color_tex = *render_fbo[0].attachment_texture_ptr("color"),
 			&depth_tex = *render_fbo[0].attachment_texture_ptr("depth");
@@ -1528,7 +1518,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "epsilon", epsilon);
 	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
-	glDispatchCompute(vp[2], vp[3], 1);
+	glDispatchCompute(view_width, view_height, 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	compute_shader.disable(ctx);
@@ -1540,9 +1530,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 
 void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 {
-	GLint vp[4];
-	glGetIntegerv(GL_VIEWPORT, vp);
-	double aspect = (double)vp[2] / vp[3];
+	double aspect = (double)view_width / view_height;
 
 	std::cout << "in warp: " << aspect << std::endl;
 
