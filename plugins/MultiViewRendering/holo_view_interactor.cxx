@@ -1011,7 +1011,6 @@ void holo_view_interactor::init_frame(context& ctx)
 			if (holo_mpx_mode == HM_QUILT) {
 				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 				vi = 0;
 				for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 					for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
@@ -1053,24 +1052,21 @@ void holo_view_interactor::init_frame(context& ctx)
 			if (holo_mpx_mode == HM_QUILT) {
 				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 				vi = 0;
-				while (vi < nr_holo_views + 3) {
+				while (vi < nr_holo_views) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 					volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
 												  (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
-					quilt_row = vi / quilt_nr_cols;
-					quilt_col = vi % quilt_nr_cols;
-					vi += 4;
 				}
 			}
 			else {
 				vi = 0;
-				while (vi < nr_holo_views+3) {
+				while (vi < nr_holo_views) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-					volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+										 (unsigned)((size_t)volume_fbo.handle) - 1, 0);
 					glClear(GL_DEPTH_BUFFER_BIT);
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
 												  (float)nr_holo_views);
@@ -1082,11 +1078,14 @@ void holo_view_interactor::init_frame(context& ctx)
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
 			if (holo_mpx_mode == HM_QUILT) {
-				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
-				glViewportIndexedf((GLuint)0, vp[0], vp[1], vp[2], vp[3]);
-				glScissorIndexed((GLuint)0, vp[0], vp[1], vp[2], vp[3]);
-				glViewportIndexedf((GLuint)1, vp[0] + vp[2], vp[1], vp[2], vp[3]);
-				glScissorIndexed((GLuint)1, vp[0] + vp[2], vp[1], vp[2], vp[3]);
+				for (GLuint i = 0; i < 4; i++) {
+					quilt_row = vi / quilt_nr_cols;
+					quilt_col = vi % quilt_nr_cols;
+					ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
+					glViewportIndexedf(i, vp[0], vp[1], vp[2], vp[3]);
+					glScissorIndexed(i, vp[0], vp[1], vp[2], vp[3]);
+					vi++;
+				}
 				glEnable(GL_SCISSOR_TEST);
 			}
 		}

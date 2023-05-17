@@ -24,7 +24,7 @@ out vec4 color_fs;
 out vec2 texcoord_fs;
 
 out int gl_Layer;
-//out int gl_ViewportIndex;
+out int gl_ViewportIndex;
 
 //***** begin interface of view.glsl ***********************************
 mat4 get_projection_matrix();
@@ -44,9 +44,9 @@ void main()
 
 		gl_Position = p * gl_in[i].gl_Position;
 
-		gl_Layer = gl_InvocationID;
-		//gl_Layer = int(0.5*(eye+1) * num_holo_views) + gl_InvocationID;
-		//gl_ViewportIndex = gl_InvocationID;
+		//gl_Layer = gl_InvocationID;
+		gl_Layer = int(0.5*(eye+1) * num_holo_views) + gl_InvocationID;
+		gl_ViewportIndex = gl_InvocationID;
 
 		EmitVertex();
 	}
