@@ -1055,40 +1055,38 @@ void holo_view_interactor::init_frame(context& ctx)
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 				vi = 0;
-				for (quilt_row = 0; quilt_row < quilt_nr_rows; quilt_row+4) {
-					for (quilt_col = 0; quilt_col < quilt_nr_cols; quilt_col+4) {
-
-						volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-						//mesh.draw_geometry_shader(ctx, get_parallax_zero_depth(), eye_distance, vi,
-						//						  1 / (float)nr_holo_views);
-						//perform_render_pass(ctx, vi, RP_STEREO);
-						if (vi + 4 >= nr_holo_views)
-							break;
-						else
-							vi += 4;
-					}
-					if (vi >= nr_holo_views)
-						break;
+				while (vi < nr_holo_views + 3) {
+					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+					volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
+												  (float)nr_holo_views);
+					perform_render_pass(ctx, vi, RP_STEREO);
+					quilt_row = vi / quilt_nr_cols;
+					quilt_col = vi % quilt_nr_cols;
+					vi += 4;
 				}
 			}
 			else {
-				for (vi = 0; vi < nr_holo_views; vi+4) {
-					//Attach 3d texture without anything else so that gl_Layer picks right layer??
-					volume_fbo.attach(ctx, volume_render_tex, 0, 0);
+				vi = 0;
+				while (vi < nr_holo_views+3) {
+					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+					volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
 					glClear(GL_DEPTH_BUFFER_BIT);
-					//mesh.draw_geometry_shader(ctx, get_parallax_zero_depth(), eye_distance, vi,
-					//						  1 / (float)nr_holo_views);
-					//perform_render_pass(ctx, vi, RP_STEREO);
+					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
+												  (float)nr_holo_views);
+					perform_render_pass(ctx, vi, RP_STEREO);
+					vi += 4;
 				}
 			}
 			initiate_terminal_render_pass(nr_holo_views - 1);
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
-			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 			if (holo_mpx_mode == HM_QUILT) {
 				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
-				glViewportIndexedf(vi, vp[0], vp[1], vp[2], vp[3]);
-				glScissor(vp[0], vp[1], vp[2], vp[3]);
+				glViewportIndexedf((GLuint)0, vp[0], vp[1], vp[2], vp[3]);
+				glScissorIndexed((GLuint)0, vp[0], vp[1], vp[2], vp[3]);
+				glViewportIndexedf((GLuint)1, vp[0] + vp[2], vp[1], vp[2], vp[3]);
+				glScissorIndexed((GLuint)1, vp[0] + vp[2], vp[1], vp[2], vp[3]);
 				glEnable(GL_SCISSOR_TEST);
 			}
 		}
@@ -1127,8 +1125,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		/// scene fills the whole viewport, it will appear in 3D to be roughly the same physical real-world
 		/// size as the screen.
 		///
-		if (initiate_render_pass_recursion(ctx))
-		{
+		if (initiate_render_pass_recursion(ctx)) {
 			enable_warp_fb(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
 			last_nr_viewport_columns = nr_viewport_columns;
@@ -1153,6 +1150,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		}
 		break;
 	}
+
 
 	double aspect = (double)view_width / view_height;
 
@@ -1503,7 +1501,11 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "epsilon", epsilon);
 	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+
 	glDispatchCompute(view_width, view_height, 1);
+
+	if (GL_ARB_gpu_shader_int64) {
+	}
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	compute_shader.disable(ctx);

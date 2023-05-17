@@ -131,6 +131,9 @@ class mesh_viewer :
 		vec3 eye_source[3], eye_target;
 
 		mat3 p_1[3];
+
+		float zero_parallax, eye_distance, num_holo_views, eye;
+		bool with_geometry = false;
 	} test;
 
 	public:
@@ -147,8 +150,8 @@ class mesh_viewer :
 		void clear(context& ctx);
 		void init_frame(context& ctx);
 		void draw_holes(context& ctx);
-		void draw_geometry_shader(context& ctx, float zero_parallax, float eye_distance, int eye,
-											   float eye_offset);
+		void draw_geometry_shader(context& ctx);
+		void set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views);
 		void draw_surface(context& ctx, bool opaque_part);
 		void draw(context& ctx);
 		void finish_frame(context& ctx);

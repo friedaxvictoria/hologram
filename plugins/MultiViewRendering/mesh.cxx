@@ -289,6 +289,10 @@ bool mesh_viewer::init(context& ctx)
 	success &= test.holes_shader.build_program(ctx, "holes.glpr", true);
 	success &= test.geometry_shader.build_program(ctx, "geometry.glpr", true);
 
+	test.geometry_shader.specify_standard_uniforms(true, true, true, true);
+	test.geometry_shader.specify_standard_vertex_attribute_names(ctx, true, true, true);
+	test.geometry_shader.allow_context_to_set_color(true);
+
 	// END: 3D image warping baseline test
 	////
 
@@ -357,8 +361,16 @@ void mesh_viewer::draw_holes(context& ctx)
 	glEnable(GL_DEPTH_TEST);
 }
 
-void mesh_viewer::draw_geometry_shader(context& ctx, float zero_parallax, float eye_distance, int eye,
-											float eye_offset)
+void mesh_viewer::set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views)
+{
+	test.zero_parallax = zero_parallax;
+	test.eye_distance = eye_distance;
+	test.eye = eye;
+	test.num_holo_views = num_holo_views;
+	test.with_geometry = true;
+}
+
+void mesh_viewer::draw_geometry_shader(context& ctx)
 {
 	// remember current culling setting
 	GLboolean is_culling = glIsEnabled(GL_CULL_FACE);
@@ -373,14 +385,10 @@ void mesh_viewer::draw_geometry_shader(context& ctx, float zero_parallax, float 
 	else
 		glDisable(GL_CULL_FACE);
 
-	test.geometry_shader.specify_standard_uniforms(true, true, true, true);
-	test.geometry_shader.specify_standard_vertex_attribute_names(ctx, true, true, true);
-	test.geometry_shader.allow_context_to_set_color(true);
-
-	test.geometry_shader.set_uniform(ctx, "eye_sep", eye_distance);
-	test.geometry_shader.set_uniform(ctx, "eye", eye);
-	test.geometry_shader.set_uniform(ctx, "eye_offset", eye_offset);
-	test.geometry_shader.set_uniform(ctx, "zero_parallax", zero_parallax);
+	test.geometry_shader.set_uniform(ctx, "eye_sep", test.eye_distance);
+	test.geometry_shader.set_uniform(ctx, "eye", test.eye);
+	test.geometry_shader.set_uniform(ctx, "num_holo_views", test.num_holo_views);
+	test.geometry_shader.set_uniform(ctx, "zero_parallax", test.zero_parallax);
 	test.geometry_shader.set_uniform(ctx, "culling_mode", (int)cull_mode);
 	test.geometry_shader.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
 	test.geometry_shader.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
@@ -393,6 +401,8 @@ void mesh_viewer::draw_geometry_shader(context& ctx, float zero_parallax, float 
 	else
 		glDisable(GL_CULL_FACE);
 	glCullFace(cull_face);
+
+	test.with_geometry = false;
 }
 
 /// draw the mesh surface
@@ -668,7 +678,10 @@ void mesh_viewer::draw(context& ctx)
 		}
 	}
 	if (show_surface)
-		draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
+		if (test.with_geometry)
+			draw_geometry_shader(ctx);
+		else
+			draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
 								 // re-enable correct handling of transparent mesh parts
 
 	// draw the mesh bounding box if we're not currently capturing the heightmap
