@@ -185,7 +185,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
 	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
-	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]")
+	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]"), layered_depth_tex("uint16[D]"),
+	  layered_color_tex("uint8[R,G,B,A]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -1063,21 +1064,47 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 			else {
 				vi = 0;
-				while (vi < nr_holo_views) {
+				while (vi < 4) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+
+					glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+										 (unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
 					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-										 (unsigned)((size_t)volume_fbo.handle) - 1, 0);
-					glClear(GL_DEPTH_BUFFER_BIT);
+										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+
+					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
 												  (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
+
+					/* glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+											 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
+					vi++;
+					if (vi >= nr_holo_views)
+						break;
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1,
+										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
+					vi++;
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2,
+										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
+					vi++;
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3,
+										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
+					vi++;*/
 					vi += 4;
+					glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				}
 			}
 			initiate_terminal_render_pass(nr_holo_views - 1);
 		}
 		if (!multi_pass_ignore_finish(ctx)) {
 			if (holo_mpx_mode == HM_QUILT) {
+				glEnable(GL_SCISSOR_TEST);
 				for (GLuint i = 0; i < 4; i++) {
 					quilt_row = vi / quilt_nr_cols;
 					quilt_col = vi % quilt_nr_cols;
@@ -1086,7 +1113,6 @@ void holo_view_interactor::init_frame(context& ctx)
 					glScissorIndexed(i, vp[0], vp[1], vp[2], vp[3]);
 					vi++;
 				}
-				glEnable(GL_SCISSOR_TEST);
 			}
 		}
 		break;
@@ -1268,20 +1294,34 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		quilt_fbo.push_viewport(ctx);
 	}
 	else {
-		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
-			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views)
-		{
-			volume_fbo.destruct(ctx);
-			volume_render_tex.destruct(ctx);
-			volume_depth_buffer.destruct(ctx);
-			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
-			volume_depth_buffer.create(ctx, view_width, view_height);
-			volume_fbo.create(ctx, view_width, view_height);
-			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
-			volume_fbo.attach(ctx, volume_depth_buffer);
+		if (multiview_mpx_mode == MVM_BASIC) {
+			if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
+				volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views)
+			{
+				volume_fbo.destruct(ctx);
+				volume_render_tex.destruct(ctx);
+				volume_depth_buffer.destruct(ctx);
+				volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
+				volume_depth_buffer.create(ctx, view_width, view_height);
+				volume_fbo.create(ctx, view_width, view_height);
+				volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
+				volume_fbo.attach(ctx, volume_depth_buffer);
+			}
+				volume_fbo.enable(ctx, 0);
+				volume_fbo.push_viewport(ctx);
 		}
-		volume_fbo.enable(ctx, 0);
-		volume_fbo.push_viewport(ctx);
+		else {
+			if (!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
+					layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4)
+			{
+				layered_fbo.destruct(ctx);
+				layered_depth_tex.destruct(ctx);
+				layered_color_tex.destruct(ctx);
+				layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+				layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+				layered_fbo.create(ctx, view_width, view_height);
+			}
+		}
 	}
 }
 
@@ -1296,7 +1336,7 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 			on_set(&quilt_write_to_file);
 		}
 	}
-	else {
+	else if (multiview_mpx_mode == MVM_BASIC) {
 		volume_fbo.pop_viewport(ctx);
 		volume_fbo.disable(ctx);
 	}
@@ -1638,19 +1678,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 
 void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 {
-	/////////////////////////////////////////////
-	/// --NOTE--
-	/// Here is the place were the amount of rendered views (2 for the baseline approach) should be warped into all the
-	/// other views that the hologram needs (usually 9x5 = 45, stored in nr_holo_views which is right now still
-	/// synchronized to nr_render_views). For that, it will be necessary to differentiate between the textures the
-	/// initial views are rendered into, and the "surface" (in the sense that this method uses the term) where the
-	/// lightfield views for the hologram are stored. The below code still uses the texture containing the rendered
-	/// views directly, but they will eventually contain much less views than the hologram needs (probably just 2).
-	/// After image warping, the results need to be written to another texture containing all views that define the
-	/// lightfield (called quilt_holo_tex or volume_holo_tex, depending on the multiplexing strategy selected for image
-	/// warping in the GUI), and this texture will be the input for the holo shader below.
-	///
-	///
 	if (generate_hologram) {
 		if (!display_fbo.is_created() || display_fbo.get_width() != display_calib.width ||
 			display_fbo.get_height() != display_calib.height)
@@ -1725,8 +1752,15 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		}
 		else {
 			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
-				volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-				volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
+				//volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
+				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+									 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+				layered_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+				//volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 			}
 			else {
 				volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
