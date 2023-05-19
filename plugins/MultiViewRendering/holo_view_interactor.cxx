@@ -978,8 +978,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
 		return false;
-	if (!screen.build_program(ctx, "screen.glpr", true))
-		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
@@ -1059,8 +1057,7 @@ void holo_view_interactor::init_frame(context& ctx)
 				while (vi < nr_holo_views) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 					volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
-												  (float)nr_holo_views);
+					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e, (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
 				}
 			}
@@ -1071,28 +1068,25 @@ void holo_view_interactor::init_frame(context& ctx)
 
 					glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
 
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-											(unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,(unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
 					glClear(GL_COLOR_BUFFER_BIT);
 
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-												(unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,(unsigned)((size_t)layered_color_tex.handle) - 1, 0);
 					glClear(GL_COLOR_BUFFER_BIT);
 
-					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
-												  (float)nr_holo_views);
+					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e, (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
 
-					/* for (int i = 0; i < 4; i++)
+					for (int i = 0; i < 4; i++)
 					{							  
-						glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle), GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
-										   (unsigned)((size_t)volume_render_tex.handle), GL_TEXTURE_3D, 0, 0, 0, vi,
+						glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle)-1, GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
+										   (unsigned)((size_t)volume_render_tex.handle)-1, GL_TEXTURE_3D, 0, 0, 0, vi,
 										   view_width,view_height,1);
 						vi++;
 						if (vi == nr_holo_views)
 							break;
-					}*/
-					vi+=4;
+					}
+
 					if (vi == nr_holo_views)
 						break;
 
@@ -1265,8 +1259,7 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 	}
 	else {
 		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
-			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views)
-			{
+			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views){
 			volume_fbo.destruct(ctx);
 			volume_render_tex.destruct(ctx);
 			volume_depth_buffer.destruct(ctx);
@@ -1275,23 +1268,19 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			volume_fbo.create(ctx, view_width, view_height);
 			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
 			volume_fbo.attach(ctx, volume_depth_buffer);
-			}
-			if (multiview_mpx_mode == MVM_BASIC) {
-
-				volume_fbo.enable(ctx, 0);
-				volume_fbo.push_viewport(ctx);
 		}
-		else {
-			if (!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
-					layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4)
-			{
-				layered_fbo.destruct(ctx);
-				layered_depth_tex.destruct(ctx);
-				layered_color_tex.destruct(ctx);
-				layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
-				layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
-				layered_fbo.create(ctx, view_width, view_height);
-			}
+		volume_fbo.enable(ctx, 0);
+		volume_fbo.push_viewport(ctx);
+		if ((!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
+			layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4) &&
+			multiview_mpx_mode == MVM_GEOMETRY)
+		{
+			layered_fbo.destruct(ctx);
+			layered_depth_tex.destruct(ctx);
+			layered_color_tex.destruct(ctx);
+			layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+			layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+			layered_fbo.create(ctx, view_width, view_height);
 		}
 	}
 }
@@ -1307,7 +1296,7 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 			on_set(&quilt_write_to_file);
 		}
 	}
-	else if (multiview_mpx_mode == MVM_BASIC) {
+	else{
 		volume_fbo.pop_viewport(ctx);
 		volume_fbo.disable(ctx);
 	}
@@ -1546,7 +1535,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		quilt_warp_fbo.enable(ctx);
 		quilt_warp_fbo.push_viewport(ctx);
 
-		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+		ctx.set_bg_color(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		vi = 0;
@@ -1723,21 +1712,8 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		}
 		else {
 			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
-				//volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-
-				screen.enable(ctx);
-				screen.set_uniform(ctx, "depth_value", 1.0f);
-				screen.set_uniform(ctx, "img", (int)view_index);
-				glEnable(GL_DEPTH_TEST);
-				glClear(GL_COLOR_BUFFER_BIT);
-				layered_color_tex.enable(ctx, 0);
-				layered_depth_tex.enable(ctx, 1);
-				glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-				layered_color_tex.disable(ctx);
-				layered_depth_tex.disable(ctx);
-				screen.disable(ctx);
-				
-				//volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
+				volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+				volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 			}
 			else {
 				volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
