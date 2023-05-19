@@ -125,7 +125,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
   protected:
 	// quilt
-	rgb quilt_bg_color = rgb(0.3f, 0.3f, 0.3f);
+	rgb quilt_bg_color = rgb(0.0f, 0.0f, 0.0f);
 	bool quilt_use_offline_texture = true;
 	unsigned quilt_width = 8192;
 	unsigned quilt_height = 8192;
@@ -152,7 +152,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader;
+	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader, screen;
 	cgv::render::texture compute_tex;
 	GPUgeometry heightmap, heightmap_warp;
 

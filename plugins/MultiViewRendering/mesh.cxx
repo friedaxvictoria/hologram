@@ -393,6 +393,8 @@ void mesh_viewer::draw_geometry_shader(context& ctx)
 	test.geometry_shader.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
 	test.geometry_shader.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
 
+	ctx.set_color(surface_color);
+
 	mesh_for_geo_info.draw_all(ctx);
 
 	// recover opengl culling mode
@@ -401,8 +403,6 @@ void mesh_viewer::draw_geometry_shader(context& ctx)
 	else
 		glDisable(GL_CULL_FACE);
 	glCullFace(cull_face);
-
-	test.with_geometry = false;
 }
 
 /// draw the mesh surface
@@ -697,7 +697,14 @@ void mesh_viewer::draw(context& ctx)
 void mesh_viewer::finish_frame(context& ctx)
 {
 	if (show_surface)
-		draw_surface(ctx, false); // --NOTE-- uncomment once done testing the image warp to re-enable correct handling
+		if (test.with_geometry) {
+			draw_geometry_shader(ctx);
+			test.with_geometry = false;
+
+		}
+		else
+			draw_surface(ctx, false); // --NOTE-- uncomment once done testing the image warp to re-enable correct
+									 // handling
 								  // of transparent mesh parts
 }
 

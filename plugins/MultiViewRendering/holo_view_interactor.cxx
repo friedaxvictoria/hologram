@@ -185,7 +185,7 @@ void holo_view_interactor::timer_event(double t, double dt)
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
 	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
-	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]"), layered_depth_tex("uint16[D]"),
+	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]"), layered_depth_tex("flt32[D]"),
 	  layered_color_tex("uint8[R,G,B,A]")
 {
 	enable_messages = true;
@@ -978,6 +978,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
 		return false;
+	if (!screen.build_program(ctx, "screen.glpr", true))
+		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
@@ -1010,7 +1012,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			last_nr_viewport_columns = nr_viewport_columns;
 			last_nr_viewport_rows = nr_viewport_rows;
 			if (holo_mpx_mode == HM_QUILT) {
-				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+				ctx.set_bg_color(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 				vi = 0;
 				for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
@@ -1051,7 +1053,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			last_nr_viewport_columns = nr_viewport_columns;
 			last_nr_viewport_rows = nr_viewport_rows;
 			if (holo_mpx_mode == HM_QUILT) {
-				glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+				ctx.set_bg_color(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 				vi = 0;
 				while (vi < nr_holo_views) {
@@ -1064,39 +1066,36 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 			else {
 				vi = 0;
-				while (vi < 4) {
+				while (vi < nr_holo_views) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 
 					glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-										 (unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
 
-					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+											(unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
+					glClear(GL_COLOR_BUFFER_BIT);
+
+					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+												(unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+					glClear(GL_COLOR_BUFFER_BIT);
+
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e,
 												  (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
 
-					/* glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-											 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
-					vi++;
-					if (vi >= nr_holo_views)
+					/* for (int i = 0; i < 4; i++)
+					{							  
+						glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle), GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
+										   (unsigned)((size_t)volume_render_tex.handle), GL_TEXTURE_3D, 0, 0, 0, vi,
+										   view_width,view_height,1);
+						vi++;
+						if (vi == nr_holo_views)
+							break;
+					}*/
+					vi+=4;
+					if (vi == nr_holo_views)
 						break;
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1,
-										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
-					vi++;
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2,
-										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
-					vi++;
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3,
-										 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-					volume_render_tex.replace_from_buffer(ctx, 0, 0, vi, 0, 0, view_width, view_height, 0);
-					vi++;*/
-					vi += 4;
+
 					glBindFramebuffer(GL_FRAMEBUFFER, 0);
 				}
 			}
@@ -1121,35 +1120,6 @@ void holo_view_interactor::init_frame(context& ctx)
 	case MVM_WARPING_CLOSEST:
 	case MVM_COMPUTE:
 	case MVM_BACKWARDS:
-		/////////////////////////////////////////////
-		/// --NOTE--
-		/// In quilt or volume mode, we want to spawn an additional render pass over all drawables for every
-		/// view we want to render. Classes derived from cgv::render::view get their respective init... draw
-		/// methods called before all other drawables, and their finish... methods after all other drawables.
-		///
-		/// This enables us to to initiate recursion before anything is drawn. Initially, we get to this point
-		/// and initiate_render_pass_recursion() returns true since no recursion was already ongoing. In the
-		/// body of the if-clause we can then spawn additional render passes (via perform_render_pass())
-		/// according to whatever logic our holo view requires.
-		/// In these recursive passes, initiate_render_pass_recursion() will return false so the if-clause is
-		/// not triggered. The logic at the bottom of the function can thus set the modelview and projection
-		/// matrices as needed.
-		///
-		/// The actual modelview and projection matrices used in the individual render passes depend on the
-		/// view index vi, which is used to linearly interpolate the eye position current_e between -1 (left-
-		/// most position) and +1 (right-most position). The logic inside the recursive passes then use this
-		/// value to translate and shear the matrices accordingly.
-		///
-		/// The actual amount of translation/shearing between leftmost and rightmost eye positions implicitely
-		/// depends on the scene size, which is determined as the world-space extend of the viewing frustum of
-		/// the neutral eye position at the focus point of the orbit camera. Since it's assumed that the focus
-		/// point lies exactly on the display screen in physical reality (the parallax-zero-plane), the
-		/// apparent size of the virtual scene (and resulting parallax) is effectively scaled/normalized
-		/// relative to the distance between focus point and camera position - this means that when (a) the
-		/// focus point is near the center of the scene and (b) the observer is far enough away such that the
-		/// scene fills the whole viewport, it will appear in 3D to be roughly the same physical real-world
-		/// size as the screen.
-		///
 		if (initiate_render_pass_recursion(ctx)) {
 			enable_warp_fb(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
@@ -1294,19 +1264,20 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		quilt_fbo.push_viewport(ctx);
 	}
 	else {
-		if (multiview_mpx_mode == MVM_BASIC) {
-			if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
-				volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views)
+		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
+			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views)
 			{
-				volume_fbo.destruct(ctx);
-				volume_render_tex.destruct(ctx);
-				volume_depth_buffer.destruct(ctx);
-				volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
-				volume_depth_buffer.create(ctx, view_width, view_height);
-				volume_fbo.create(ctx, view_width, view_height);
-				volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
-				volume_fbo.attach(ctx, volume_depth_buffer);
+			volume_fbo.destruct(ctx);
+			volume_render_tex.destruct(ctx);
+			volume_depth_buffer.destruct(ctx);
+			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
+			volume_depth_buffer.create(ctx, view_width, view_height);
+			volume_fbo.create(ctx, view_width, view_height);
+			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
+			volume_fbo.attach(ctx, volume_depth_buffer);
 			}
+			if (multiview_mpx_mode == MVM_BASIC) {
+
 				volume_fbo.enable(ctx, 0);
 				volume_fbo.push_viewport(ctx);
 		}
@@ -1753,13 +1724,19 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 		else {
 			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
 				//volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-				glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
-				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-									 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-				layered_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-
+				screen.enable(ctx);
+				screen.set_uniform(ctx, "depth_value", 1.0f);
+				screen.set_uniform(ctx, "img", (int)view_index);
+				glEnable(GL_DEPTH_TEST);
+				glClear(GL_COLOR_BUFFER_BIT);
+				layered_color_tex.enable(ctx, 0);
+				layered_depth_tex.enable(ctx, 1);
+				glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+				layered_color_tex.disable(ctx);
+				layered_depth_tex.disable(ctx);
+				screen.disable(ctx);
+				
 				//volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 			}
 			else {
