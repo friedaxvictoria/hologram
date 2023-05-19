@@ -1015,7 +1015,6 @@ void holo_view_interactor::init_frame(context& ctx)
 				vi = 0;
 				for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 					for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
-
 						volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
 						perform_render_pass(ctx, vi, RP_STEREO);
 						if (++vi == nr_holo_views)
@@ -1067,26 +1066,21 @@ void holo_view_interactor::init_frame(context& ctx)
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 
 					glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
-
 					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,(unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
 					glClear(GL_COLOR_BUFFER_BIT);
-
 					glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,(unsigned)((size_t)layered_color_tex.handle) - 1, 0);
 					glClear(GL_COLOR_BUFFER_BIT);
 
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e, (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
 
-					for (int i = 0; i < 4; i++)
-					{							  
+					for (int i = 0; i < 4; i++){			
 						glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle)-1, GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
 										   (unsigned)((size_t)volume_render_tex.handle)-1, GL_TEXTURE_3D, 0, 0, 0, vi,
 										   view_width,view_height,1);
-						vi++;
-						if (vi == nr_holo_views)
+						if (++vi == nr_holo_views)
 							break;
 					}
-
 					if (vi == nr_holo_views)
 						break;
 
@@ -1187,7 +1181,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 		if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
 			// turn our up to 3 views into a quilt or hologram
 			compute_holo_views(ctx);
-			if (quilt_write_to_file) {
+			if (quilt_write_to_file && holo_mpx_mode==HM_QUILT) {
 				quilt_holo_tex.write_to_file(ctx, "quilt.png");
 				quilt_write_to_file = false;
 				on_set(&quilt_write_to_file);

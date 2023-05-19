@@ -677,12 +677,13 @@ void mesh_viewer::draw(context& ctx)
 			cr.disable(ctx);
 		}
 	}
-	if (show_surface)
+	if (show_surface) {
 		if (test.with_geometry)
 			draw_geometry_shader(ctx);
 		else
 			draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
-								 // re-enable correct handling of transparent mesh parts
+									 // re-enable correct handling of transparent mesh parts
+	}
 
 	// draw the mesh bounding box if we're not currently capturing the heightmap
 	if (show_bbox)
