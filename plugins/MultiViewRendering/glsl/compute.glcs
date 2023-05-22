@@ -1,12 +1,11 @@
 #version 460 core
 
-//#extension GL_ARB_gpu_shader_int64 : require
-
 layout (local_size_x = 1, local_size_y = 1) in;
 
 layout(binding = 0, rgba32f) uniform readonly image2D color_tex;
-layout(binding = 1, rgba32f) uniform readonly image2D depth_tex;
-layout(binding = 2, rgba32f) uniform writeonly image2D warped_tex;
+layout(binding = 1, rgba32f) uniform writeonly image3D final;
+
+uniform sampler2D depth_tex;
 
 uniform mat4 p_source;
 
@@ -15,6 +14,13 @@ uniform vec4 eye_target;
 
 uniform float z_far;
 uniform float shear;
+
+uniform int buf_width;
+
+layout(std430, binding = 0) buffer storage_buffer
+{
+    int col_depth[];
+};
 
 void main()
 {  	
@@ -27,29 +33,31 @@ void main()
     texcoord.y = global_coord.y/float(dim.y);
 
 	vec4 color = imageLoad(color_tex, global_coord);
-	float pt_depth = imageLoad(depth_tex, global_coord).r;
-	if (pt_depth > 1.0)
-		color.w = 0.0;
+	float pt_depth = textureLod(depth_tex, texcoord, 0).r;
+	//if (pt_depth > 1.0)
+		//do some form of discarding
 
-	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*pt_depth-1, 1);
+	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 	intersection_z_far.x = intersection_z_far.x - shear;
 
-	//direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
+	//vec3 direction = normalize(eye_source.xyz - pos_eye.xyz);
 
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
-	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w-1);
+	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
 	ivec2 new_pos = ivec2(int(x_window * dim.x), global_coord.y);
 
+	vec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
-	int point = (depth << 32) | int(packUnorm4x8(color));
+	int point = (depth << 24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
 
-	//atomicMin(framebuffer[pixelID],point);
+	int index = new_pos.x+new_pos.y*buf_width;
+	atomicMin(col_depth[index],point);
 
-	imageStore(warped_tex, new_pos, color);
+	imageStore(final, ivec3(new_pos,22), color);
 }

@@ -185,8 +185,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
 	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
-	  volume_warp_depth_buffer("[D]"), compute_tex("flt32[R,G,B,A]"), layered_depth_tex("flt32[D]"),
-	  layered_color_tex("uint8[R,G,B,A]")
+	  volume_warp_depth_buffer("[D]"), layered_depth_tex("flt32[D]"), layered_color_tex("uint8[R,G,B,A]"),
+	  volume_holo_tex("flt32[R,G,B,A]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -962,7 +962,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		render_fbo[i].add_attachment(
 			  "depth", "[D]",
 			  cgv::render::TextureFilter::TF_NEAREST,  cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
-		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
+		render_fbo[i].add_attachment("color", "flt32[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
 									 cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
 	}
 
@@ -976,11 +976,21 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!compute_shader.build_program(ctx, "compute.glpr", true))
 		return false;
+	if (!resolve_compute_shader.build_program(ctx, "compute_resolve.glpr", true))
+		return false;
 	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
 		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
+
+	storage_data.reserve(view_width*view_height);
+
+	/* glGenBuffers(1, &ssbo);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(int) * view_width * view_height), &storage_data,
+				 GL_DYNAMIC_COPY);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);*/
 
 	return true;
 }
@@ -1118,8 +1128,6 @@ void holo_view_interactor::init_frame(context& ctx)
 				current_render_fbo = render_fbo[vi];
 				current_render_fbo.enable(ctx);
 				current_render_fbo.ref_frame_buffer().push_viewport(ctx);
-				// make the heightmap quad very slightly visible even where it doesn't contain scene geometry
-				glClearColor(.03125f, .03125f, .03125f, 1.f);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 				perform_render_pass(ctx, vi, RP_STEREO);
@@ -1439,6 +1447,26 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 
 		float shear = (eye_target[0] - eye_source[i][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
+		vec2 texcoord;
+		texcoord[0] = 400 / (float)view_width;
+		texcoord[1] = 500 / (float)view_height;
+
+		float pt_depth = 0.9;
+
+
+		vec4 pt_eye_coord2 = inv(proj_source[i]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
+		vec4 pos_eye2 = vec4(w_clip(pt_eye_coord2), 1);
+
+		vec4 intersection_z_far2 = eye_target + (eye_target - pos_eye2) * z_far_derived / pos_eye2[2];
+		intersection_z_far2[0] = intersection_z_far2[0] - shear;
+
+		vec4 intersection_pt_depth2 =
+			  eye_source[i] + (eye_source[i] - intersection_z_far2) * pos_eye2[2] / intersection_z_far2[2];
+
+		vec4 new_pos_clip2 = proj_source[i] * intersection_pt_depth2;
+		vec3 w = w_clip(new_pos_clip2);
+		float clip = new_pos_clip2[0] / new_pos_clip2[4];
+
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
@@ -1462,31 +1490,71 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	}
 }
 
-void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
+void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
+{
 
 	double aspect = (double)view_width / view_height;
+	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+	float shear =
+		  (eye_target[0] - eye_source[0][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
 	texture &color_tex = *render_fbo[0].attachment_texture_ptr("color"),
 			&depth_tex = *render_fbo[0].attachment_texture_ptr("depth");
 
 	int color_tex_handle = (int&)color_tex.handle - 1;
-	int depth_tex_handle = (int&)depth_tex.handle - 1;
-	int compute_tex_handle;
-	if (holo_mpx_mode == HM_QUILT)
-		compute_tex_handle = (int&)quilt_holo_tex.handle - 1;
-	else
-		compute_tex_handle = (int&)volume_holo_tex.handle - 1;
-	glBindImageTexture(0, color_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, depth_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(2, compute_tex_handle, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+	vec2 texcoord;
+	texcoord[0] = 400 / (float)view_width;
+	texcoord[1] = 500 / (float)view_height;
 
-	float shear =
-		  (eye_target[0] - eye_source[0][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
+	float pt_depth = 0.9;
 
+	vec4 pt_eye_coord = inv(proj_source[0]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
+	vec4 pos_eye = vec4(w_clip(pt_eye_coord), 1);
+
+	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far_derived / pos_eye[2];
+	intersection_z_far[0] = intersection_z_far[0] - shear;
+
+	vec4 intersection_pt_depth =
+		  eye_source[0] + (eye_source[0] - intersection_z_far) * pos_eye[2] / intersection_z_far[2];
+
+	vec4 new_pos_clip = proj_source[0] * intersection_pt_depth;
+	float x_window = 0.5 * (new_pos_clip[0] / new_pos_clip[4] + 1);
+
+	int v = x_window * view_width;
+
+
+
+	vec4 pt_eye_coord2 = inv(proj_source[0]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
+	vec4 pos_eye2 = vec4(w_clip(pt_eye_coord2), 1);
+
+	vec4 intersection_z_far2 = eye_target + (eye_target - pos_eye2) * z_far_derived / pos_eye2[2];
+	intersection_z_far2[0] = intersection_z_far2[0] - shear;
+
+	vec4 intersection_pt_depth2 =
+		  eye_source[0] + (eye_source[0] - intersection_z_far2) * pos_eye2[2] / intersection_z_far2[2];
+
+	vec4 new_pos_clip2 = proj_source[0] * intersection_pt_depth2;
+	float clip = new_pos_clip2[0]/new_pos_clip2[4];
 
 	compute_shader.enable(ctx);
+
+	//GLuint id;
+	//compute_shader.put_id(id);
+	
+	//glGenBuffers(1, &ssbo);
+	//GLuint index = glGetProgramResourceIndex(id, GL_SHADER_STORAGE_BLOCK, "storage_buffer");
+
+	//glShaderStorageBlockBinding(id, index, GLuint(0));
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+
+	glBindImageTexture(0, color_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+	depth_tex.enable(ctx, 0);
+	compute_shader.set_uniform(ctx, "depth_tex", 0);
+
 	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);
 	compute_shader.set_uniform(ctx, "eye_source", eye_source[0]);
 	compute_shader.set_uniform(ctx, "eye_target", eye_target);
@@ -1494,18 +1562,41 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx) {
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "epsilon", epsilon);
 	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+	compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
+
+	glDispatchCompute(view_width, view_height, 1);
+	
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	compute_shader.disable(ctx);
+}
+
+void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx)
+{
+	resolve_compute_shader.enable(ctx);
+
+	/* GLuint id;
+	compute_shader.put_id(id);
+
+	GLuint index = glGetProgramResourceIndex(id, GL_SHADER_STORAGE_BLOCK, "storage_buffer");
+	glShaderStorageBlockBinding(id, index, GLuint(0));*/
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+
+	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+	resolve_compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
+	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", nr_holo_views);
 
 	glDispatchCompute(view_width, view_height, 1);
 
-	if (GL_ARB_gpu_shader_int64) {
-	}
-
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	compute_shader.disable(ctx);
-
-	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(2, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	resolve_compute_shader.disable(ctx);
 }
 
 void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
@@ -1529,7 +1620,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		quilt_warp_fbo.enable(ctx);
 		quilt_warp_fbo.push_viewport(ctx);
 
-		ctx.set_bg_color(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
+		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		vi = 0;
@@ -1573,6 +1664,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			if (vi == nr_holo_views)
 				break;
 		}
+		if (multiview_mpx_mode == MVM_COMPUTE)
+			resolve_pass_compute_shader(ctx);
 		quilt_warp_fbo.pop_viewport(ctx);
 		quilt_warp_fbo.disable(ctx);
 		glScissor(0, 0, ctx.get_width(), ctx.get_height());
@@ -1625,6 +1718,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				break;
 			}
 		}
+		//if (multiview_mpx_mode == MVM_COMPUTE)
+		//	resolve_pass_compute_shader(ctx);
 		volume_warp_fbo.pop_viewport(ctx);
 		volume_warp_fbo.disable(ctx);
 	}

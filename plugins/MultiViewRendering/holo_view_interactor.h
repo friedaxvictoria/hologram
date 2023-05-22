@@ -152,8 +152,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader;
-	cgv::render::texture compute_tex;
+	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader, resolve_compute_shader;
 	GPUgeometry heightmap, heightmap_warp;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
@@ -168,6 +167,10 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
 	//reference to mesh_viewer
 	mesh_viewer* mesh = nullptr;
+
+	//variables for compute shader
+	GLuint ssbo;
+	std::vector<int> storage_data;
 
 	std::chrono::steady_clock::time_point time_start, time_end;
 
@@ -240,6 +243,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void draw_image_warp(cgv::render::context& ctx);
 	void draw_image_warp_closest(cgv::render::context& ctx);
 	void warp_compute_shader(cgv::render::context& ctx);
+	void resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
 
