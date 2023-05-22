@@ -170,7 +170,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
 	//variables for compute shader
 	GLuint ssbo;
-	std::vector<int> storage_data;
 
 	std::chrono::steady_clock::time_point time_start, time_end;
 

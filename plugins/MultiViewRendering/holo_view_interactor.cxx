@@ -984,14 +984,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
 
-	storage_data.reserve(view_width*view_height);
-
-	/* glGenBuffers(1, &ssbo);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, GLsizeiptr(sizeof(int) * view_width * view_height), &storage_data,
-				 GL_DYNAMIC_COPY);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);*/
-
 	return true;
 }
 
@@ -1447,26 +1439,6 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 
 		float shear = (eye_target[0] - eye_source[i][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
-		vec2 texcoord;
-		texcoord[0] = 400 / (float)view_width;
-		texcoord[1] = 500 / (float)view_height;
-
-		float pt_depth = 0.9;
-
-
-		vec4 pt_eye_coord2 = inv(proj_source[i]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
-		vec4 pos_eye2 = vec4(w_clip(pt_eye_coord2), 1);
-
-		vec4 intersection_z_far2 = eye_target + (eye_target - pos_eye2) * z_far_derived / pos_eye2[2];
-		intersection_z_far2[0] = intersection_z_far2[0] - shear;
-
-		vec4 intersection_pt_depth2 =
-			  eye_source[i] + (eye_source[i] - intersection_z_far2) * pos_eye2[2] / intersection_z_far2[2];
-
-		vec4 new_pos_clip2 = proj_source[i] * intersection_pt_depth2;
-		vec3 w = w_clip(new_pos_clip2);
-		float clip = new_pos_clip2[0] / new_pos_clip2[4];
-
 		color_tex.enable(ctx, 0);
 		warping_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
@@ -1501,56 +1473,16 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	texture &color_tex = *render_fbo[0].attachment_texture_ptr("color"),
 			&depth_tex = *render_fbo[0].attachment_texture_ptr("depth");
 
-	int color_tex_handle = (int&)color_tex.handle - 1;
-
-	vec2 texcoord;
-	texcoord[0] = 400 / (float)view_width;
-	texcoord[1] = 500 / (float)view_height;
-
-	float pt_depth = 0.9;
-
-	vec4 pt_eye_coord = inv(proj_source[0]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
-	vec4 pos_eye = vec4(w_clip(pt_eye_coord), 1);
-
-	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far_derived / pos_eye[2];
-	intersection_z_far[0] = intersection_z_far[0] - shear;
-
-	vec4 intersection_pt_depth =
-		  eye_source[0] + (eye_source[0] - intersection_z_far) * pos_eye[2] / intersection_z_far[2];
-
-	vec4 new_pos_clip = proj_source[0] * intersection_pt_depth;
-	float x_window = 0.5 * (new_pos_clip[0] / new_pos_clip[4] + 1);
-
-	int v = x_window * view_width;
-
-
-
-	vec4 pt_eye_coord2 = inv(proj_source[0]) * vec4(2 * texcoord[0] - 1, 2 * texcoord[1] - 1, 2 * pt_depth - 1, 1);
-	vec4 pos_eye2 = vec4(w_clip(pt_eye_coord2), 1);
-
-	vec4 intersection_z_far2 = eye_target + (eye_target - pos_eye2) * z_far_derived / pos_eye2[2];
-	intersection_z_far2[0] = intersection_z_far2[0] - shear;
-
-	vec4 intersection_pt_depth2 =
-		  eye_source[0] + (eye_source[0] - intersection_z_far2) * pos_eye2[2] / intersection_z_far2[2];
-
-	vec4 new_pos_clip2 = proj_source[0] * intersection_pt_depth2;
-	float clip = new_pos_clip2[0]/new_pos_clip2[4];
-
 	compute_shader.enable(ctx);
 
-	//GLuint id;
-	//compute_shader.put_id(id);
-	
-	//glGenBuffers(1, &ssbo);
-	//GLuint index = glGetProgramResourceIndex(id, GL_SHADER_STORAGE_BLOCK, "storage_buffer");
+	glDeleteBuffers(1, &ssbo);
+	glGenBuffers(1, &ssbo);
+	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height), nullptr, GL_DYNAMIC_COPY);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
-	//glShaderStorageBlockBinding(id, index, GLuint(0));
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
-
-	glBindImageTexture(0, color_tex_handle, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(0, (int&)color_tex.handle - 1, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
+	//glBindImageTexture(1, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	depth_tex.enable(ctx, 0);
 	compute_shader.set_uniform(ctx, "depth_tex", 0);
@@ -1567,11 +1499,11 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	glDispatchCompute(view_width, view_height, 1);
 	
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-	//glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	//glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	compute_shader.disable(ctx);
 }
 
@@ -1579,20 +1511,19 @@ void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx
 {
 	resolve_compute_shader.enable(ctx);
 
-	/* GLuint id;
-	compute_shader.put_id(id);
-
-	GLuint index = glGetProgramResourceIndex(id, GL_SHADER_STORAGE_BLOCK, "storage_buffer");
-	glShaderStorageBlockBinding(id, index, GLuint(0));*/
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
+	uint32_t z = 0;
+	glClearTexImage((int&)volume_holo_tex.handle - 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &z);
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	resolve_compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
 	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", nr_holo_views);
 
 	glDispatchCompute(view_width, view_height, 1);
+
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
@@ -1647,9 +1578,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				case MVM_WARPING_CLOSEST:
 					draw_image_warp_closest(ctx);
 					break;
-				case MVM_COMPUTE:
-					warp_compute_shader(ctx);
-					break;
 				case MVM_BACKWARDS:
 					draw_backwards(ctx);
 					break;
@@ -1657,15 +1585,18 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 					draw_image_warp(ctx);
 					break;
 				}
-
 				if (++vi == nr_holo_views)
 					break;
 			}
 			if (vi == nr_holo_views)
 				break;
 		}
-		if (multiview_mpx_mode == MVM_COMPUTE)
+
+		if (multiview_mpx_mode == MVM_COMPUTE) {
+			warp_compute_shader(ctx);
 			resolve_pass_compute_shader(ctx);
+		}
+
 		quilt_warp_fbo.pop_viewport(ctx);
 		quilt_warp_fbo.disable(ctx);
 		glScissor(0, 0, ctx.get_width(), ctx.get_height());
@@ -1707,9 +1638,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			case MVM_WARPING_CLOSEST:
 				draw_image_warp_closest(ctx);
 				break;
-			case MVM_COMPUTE:
-				warp_compute_shader(ctx);
-				break;
 			case MVM_BACKWARDS:
 				draw_backwards(ctx);
 				break;
@@ -1718,8 +1646,12 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				break;
 			}
 		}
-		//if (multiview_mpx_mode == MVM_COMPUTE)
-		//	resolve_pass_compute_shader(ctx);
+
+		if (multiview_mpx_mode == MVM_COMPUTE) {
+			warp_compute_shader(ctx);
+			resolve_pass_compute_shader(ctx);
+		}
+
 		volume_warp_fbo.pop_viewport(ctx);
 		volume_warp_fbo.disable(ctx);
 	}

@@ -18,9 +18,23 @@ void main()
 
 	int index = coord.x+coord.y*buf_width;
 	int color_int = col_depth[index];
-	vec4 color = vec4(bitfieldExtract(color_int, 16, 8),bitfieldExtract(color_int, 8, 8),bitfieldExtract(color_int, 0, 8),1);
+
+	uint mask;
+	mask = ((1 << 8) - 1) << 16;
+	uint red = color_int & mask;
+	red = red >> 16;
+
+	mask = ((1 << 8) - 1) << 8;
+	uint green = color_int & mask;
+	green = green >> 8;
+
+	mask = ((1 << 8) - 1) << 0;
+	uint blue = color_int & mask;
+
+	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,1);
+	//vec4 color = vec4(bitfieldExtract(color_int, 16, 8)/255.0,bitfieldExtract(color_int, 8, 8)/255.0,bitfieldExtract(color_int, 0, 8)/255.0,1);
 	
-	for (int i = 0; i<nr_holo_views; i++){
-		imageStore(color_tex, ivec3(coord,i), color);
-	}
+	imageStore(color_tex, ivec3(coord,22), color);
+	imageStore(color_tex, ivec3(coord.x-1,coord.y,22), color);
+	imageStore(color_tex, ivec3(coord.x+1,coord.y,22), color);
 }

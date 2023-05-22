@@ -3,7 +3,7 @@
 layout (local_size_x = 1, local_size_y = 1) in;
 
 layout(binding = 0, rgba32f) uniform readonly image2D color_tex;
-layout(binding = 1, rgba32f) uniform writeonly image3D final;
+//layout(binding = 1, rgba32f) uniform writeonly image3D final;
 
 uniform sampler2D depth_tex;
 
@@ -34,8 +34,6 @@ void main()
 
 	vec4 color = imageLoad(color_tex, global_coord);
 	float pt_depth = textureLod(depth_tex, texcoord, 0).r;
-	//if (pt_depth > 1.0)
-		//do some form of discarding
 
 	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
@@ -52,12 +50,16 @@ void main()
 
 	ivec2 new_pos = ivec2(int(x_window * dim.x), global_coord.y);
 
-	vec4 color_bytes = ivec4(color * 255);
+	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
 	int point = (depth << 24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
 
 	int index = new_pos.x+new_pos.y*buf_width;
 	atomicMin(col_depth[index],point);
 
-	imageStore(final, ivec3(new_pos,22), color);
+	/*if (pt_depth <= 1.0){
+		imageStore(final, ivec3(new_pos,22), color);
+		imageStore(final, ivec3(new_pos.x-1,new_pos.y,22), color);
+		imageStore(final, ivec3(new_pos.x+1,new_pos.y,22), color);
+	}*/
 }
