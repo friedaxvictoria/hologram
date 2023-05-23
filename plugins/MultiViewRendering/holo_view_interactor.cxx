@@ -987,7 +987,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	view_height = ctx.get_height();
 
 	glGenBuffers(1, &ssbo);
-	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height), nullptr, GL_DYNAMIC_COPY);
+	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols), nullptr,
+					  GL_DYNAMIC_COPY);
 
 	return true;
 }
@@ -1513,10 +1514,11 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "epsilon", epsilon);
 	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
-	compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
-	compute_shader.set_uniform(ctx, "buf_height", (int)view_height);
+	compute_shader.set_uniform(ctx, "screen_w", int(view_width));
+	compute_shader.set_uniform(ctx, "screen_h", int(view_height));
+	compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
 
-	glDispatchCompute(view_width, view_height, 1);
+	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 	
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -1580,10 +1582,12 @@ void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx
 
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	resolve_compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
+	resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
+	resolve_compute_shader.set_uniform(ctx, "screen_h", int(view_height));
+	resolve_compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
 	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
 
-	glDispatchCompute(view_width, view_height, 1);
+	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 

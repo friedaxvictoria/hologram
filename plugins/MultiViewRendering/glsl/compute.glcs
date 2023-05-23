@@ -14,8 +14,9 @@ uniform float views_x_extent;
 uniform float z_far;
 uniform float shear;
 
-uniform int buf_width;
-uniform int buf_height;
+uniform int screen_w;
+uniform int screen_h;
+uniform int quilt_cols;
 uniform int nr_holo_views;
 
 layout(std430, binding = 0) buffer storage_buffer
@@ -28,15 +29,15 @@ void main()
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
 	
 	vec2 texcoord;
-	texcoord.x = global_coord.x/float(buf_width);
-    texcoord.y = global_coord.y/float(buf_height);
+	texcoord.x = global_coord.x%screen_w/float(screen_w);
+    texcoord.y = global_coord.y%screen_h/float(screen_h);
+
+	int current_view = int(global_coord.x/float(screen_w)) + int(global_coord.y/float(screen_h))*quilt_cols;
 
 	vec4 color = textureLod(color_tex0, texcoord, 0);
 	float pt_depth = textureLod(depth_tex0, texcoord, 0).r;
 	if (pt_depth >= 1.0)
 		color.a = 0;
-
-	//color = vec4(pt_depth,pt_depth,pt_depth,1);
 
 	//float start_view = -nr_holo_views/2;
 	//float views_offset = views_x_extent/nr_holo_views;
@@ -54,7 +55,7 @@ void main()
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
 	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-	ivec2 new_pos = ivec2(int(x_window * buf_width), global_coord.y);
+	ivec2 new_pos = ivec2(int((x_window) * screen_w), global_coord.y);
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
@@ -63,7 +64,7 @@ void main()
 	//in theory
 	//int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
-	int index = new_pos.x+new_pos.y*buf_width;
+	int index = global_coord.x+new_pos.y*(screen_w*quilt_cols);
 
 	//atomicMin(col_depth[index],point);
 	atomicExchange(col_depth[index],point);

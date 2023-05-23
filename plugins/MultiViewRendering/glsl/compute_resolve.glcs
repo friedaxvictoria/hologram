@@ -4,7 +4,9 @@ layout (local_size_x = 1, local_size_y = 1) in;
 
 layout(binding = 0, rgba32f) uniform writeonly image3D color_tex;
 
-uniform int buf_width;
+uniform int screen_w;
+uniform int screen_h;
+uniform int quilt_cols;
 uniform int nr_holo_views;
 
 layout(std430, binding = 0) buffer storage_buffer
@@ -15,8 +17,13 @@ layout(std430, binding = 0) buffer storage_buffer
 void main()
 {  	
 	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+	vec2 image_coord;
+	image_coord.x = coord.x%screen_w;
+    image_coord.y = coord.y%screen_h;
 
-	int index = coord.x+coord.y*buf_width;
+	int current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
+
+	int index = coord.x+coord.y*(screen_w*quilt_cols);
 	int color_int = col_depth[index];
 
 	uint mask;
@@ -38,5 +45,5 @@ void main()
 	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,alpha/255.0);
 
 	if (alpha != 0)
-		imageStore(color_tex, ivec3(coord,22), color);
+		imageStore(color_tex, ivec3(image_coord,current_view), color);
 }
