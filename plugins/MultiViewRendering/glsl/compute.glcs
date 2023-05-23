@@ -45,8 +45,6 @@ void main()
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 	intersection_z_far.x = intersection_z_far.x - shear;
 
-	//vec3 direction = normalize(eye_source.xyz - pos_eye.xyz);
-
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
@@ -56,8 +54,6 @@ void main()
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
-	//if (pt_depth > 1.0)
-	color_bytes.a = 0;
 	int point = (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
 	//in theory
@@ -65,7 +61,8 @@ void main()
 
 	int index = new_pos.x+new_pos.y*buf_width;
 
-	atomicAdd(col_depth[index],point);
+	//atomicMin(col_depth[index],point);
+	atomicExchange(col_depth[index],point);
 
 	//atomicMin(col_depth[index],point);
 }
