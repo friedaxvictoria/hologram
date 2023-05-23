@@ -7,7 +7,6 @@ layout(binding = 0, rgba32f) uniform writeonly image3D color_tex;
 uniform int screen_w;
 uniform int screen_h;
 uniform int quilt_cols;
-uniform int nr_holo_views;
 
 layout(std430, binding = 0) buffer storage_buffer
 {

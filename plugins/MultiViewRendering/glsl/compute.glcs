@@ -8,16 +8,16 @@ uniform sampler2D depth_tex0;
 uniform mat4 p_source;
 
 uniform vec4 eye_source;
-uniform vec4 eye_target;
 
-uniform float views_x_extent;
+uniform float start_x;
+uniform float x_offset;
+
 uniform float z_far;
 uniform float shear;
 
 uniform int screen_w;
 uniform int screen_h;
 uniform int quilt_cols;
-uniform int nr_holo_views;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
@@ -27,35 +27,28 @@ layout(std430, binding = 0) buffer storage_buffer
 void main()
 {  	
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
-	
-	vec2 texcoord;
-	texcoord.x = global_coord.x%screen_w/float(screen_w);
-    texcoord.y = global_coord.y%screen_h/float(screen_h);
+	vec2 texcoord = vec2(global_coord.x%screen_w/float(screen_w), global_coord.y%screen_h/float(screen_h));
 
 	int current_view = int(global_coord.x/float(screen_w)) + int(global_coord.y/float(screen_h))*quilt_cols;
+	vec4 eye_target = vec4(start_x + current_view*x_offset, 0, 0, 1);
 
 	vec4 color = textureLod(color_tex0, texcoord, 0);
 	float pt_depth = textureLod(depth_tex0, texcoord, 0).r;
 	if (pt_depth >= 1.0)
 		color.a = 0;
 
-	//float start_view = -nr_holo_views/2;
-	//float views_offset = views_x_extent/nr_holo_views;
-
-	//vec4 eye_target = vec4(start_view + i*views_offset, 0, 0, 1);
-
 	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
-	intersection_z_far.x = intersection_z_far.x - shear;
+	intersection_z_far.x = intersection_z_far.x - shear * (eye_target.x - eye_source.x) ;
 
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
 	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-	ivec2 new_pos = ivec2(int((x_window) * screen_w), global_coord.y);
+	ivec2 new_pos = ivec2(int(x_window * screen_w + global_coord.x - global_coord.x%screen_w), global_coord.y);
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
@@ -64,7 +57,7 @@ void main()
 	//in theory
 	//int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
-	int index = global_coord.x+new_pos.y*(screen_w*quilt_cols);
+	int index = new_pos.x+new_pos.y*(screen_w*quilt_cols);
 
 	//atomicMin(col_depth[index],point);
 	atomicExchange(col_depth[index],point);

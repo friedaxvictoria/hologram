@@ -1474,10 +1474,8 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 {
 
 	double aspect = (double)view_width / view_height;
-	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 	float views_x_extent = eye_distance * y_extent_at_focus * aspect;
-	float shear =
-		  (eye_target[0] - eye_source[0][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
+	float shear = (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
 	texture &color_tex0 = *render_fbo[0].attachment_texture_ptr("color"),
 			&depth_tex0 = *render_fbo[0].attachment_texture_ptr("depth"),
@@ -1507,13 +1505,10 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);
 	compute_shader.set_uniform(ctx, "eye_source", eye_source[0]);
-	compute_shader.set_uniform(ctx, "eye_target", eye_target);
-	compute_shader.set_uniform(ctx, "views_x_extent", views_x_extent);
-	compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
+	compute_shader.set_uniform(ctx, "start_x", - views_x_extent / 2);
+	compute_shader.set_uniform(ctx, "x_offset", views_x_extent / nr_holo_views);
 	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 	compute_shader.set_uniform(ctx, "shear", shear);
-	compute_shader.set_uniform(ctx, "epsilon", epsilon);
-	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 	compute_shader.set_uniform(ctx, "screen_w", int(view_width));
 	compute_shader.set_uniform(ctx, "screen_h", int(view_height));
 	compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
@@ -1585,7 +1580,6 @@ void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx
 	resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
 	resolve_compute_shader.set_uniform(ctx, "screen_h", int(view_height));
 	resolve_compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
-	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
 
 	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 
