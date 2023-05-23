@@ -33,6 +33,10 @@ void main()
 
 	vec4 color = textureLod(color_tex0, texcoord, 0);
 	float pt_depth = textureLod(depth_tex0, texcoord, 0).r;
+	if (pt_depth >= 1.0)
+		color.a = 0;
+
+	//color = vec4(pt_depth,pt_depth,pt_depth,1);
 
 	//float start_view = -nr_holo_views/2;
 	//float views_offset = views_x_extent/nr_holo_views;
@@ -63,6 +67,4 @@ void main()
 
 	//atomicMin(col_depth[index],point);
 	atomicExchange(col_depth[index],point);
-
-	//atomicMin(col_depth[index],point);
 }

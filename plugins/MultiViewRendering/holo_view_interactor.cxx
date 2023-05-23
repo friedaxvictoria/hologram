@@ -1487,8 +1487,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 	compute_shader.enable(ctx);
 
-	uint8_t col[4] = {255, 255, 255, 255};
-	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, &col);
+	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
@@ -1591,6 +1590,7 @@ void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
 	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
 	resolve_compute_shader.disable(ctx);
 }
 

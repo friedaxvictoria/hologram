@@ -35,7 +35,8 @@ void main()
 	mask = ((1 << 8) - 1) << 0;
 	uint alpha = color_int & mask;
 
-	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,alpha/255);
-	
-	imageStore(color_tex, ivec3(coord,22), color);
+	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,alpha/255.0);
+
+	if (alpha != 0)
+		imageStore(color_tex, ivec3(coord,22), color);
 }
