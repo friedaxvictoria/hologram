@@ -2,20 +2,21 @@
 
 layout (local_size_x = 1, local_size_y = 1) in;
 
-layout(binding = 0, rgba32f) uniform readonly image2D color_tex;
-//layout(binding = 1, rgba32f) uniform writeonly image3D final;
-
-uniform sampler2D depth_tex;
+uniform sampler2D color_tex0;
+uniform sampler2D depth_tex0;
 
 uniform mat4 p_source;
 
 uniform vec4 eye_source;
 uniform vec4 eye_target;
 
+uniform float views_x_extent;
 uniform float z_far;
 uniform float shear;
 
 uniform int buf_width;
+uniform int buf_height;
+uniform int nr_holo_views;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
@@ -25,15 +26,18 @@ layout(std430, binding = 0) buffer storage_buffer
 void main()
 {  	
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
-
-	ivec2 dim = imageSize(color_tex);
 	
 	vec2 texcoord;
-	texcoord.x = global_coord.x/float(dim.x);
-    texcoord.y = global_coord.y/float(dim.y);
+	texcoord.x = global_coord.x/float(buf_width);
+    texcoord.y = global_coord.y/float(buf_height);
 
-	vec4 color = imageLoad(color_tex, global_coord);
-	float pt_depth = textureLod(depth_tex, texcoord, 0).r;
+	vec4 color = textureLod(color_tex0, texcoord, 0);
+	float pt_depth = textureLod(depth_tex0, texcoord, 0).r;
+
+	//float start_view = -nr_holo_views/2;
+	//float views_offset = views_x_extent/nr_holo_views;
+
+	//vec4 eye_target = vec4(start_view + i*views_offset, 0, 0, 1);
 
 	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
@@ -48,18 +52,12 @@ void main()
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
 	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-	ivec2 new_pos = ivec2(int(x_window * dim.x), global_coord.y);
+	ivec2 new_pos = ivec2(int(x_window * buf_width), global_coord.y);
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
 	int point = (depth << 24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
 
-	int index = new_pos.x+new_pos.y*buf_width;
+	int index = new_pos.x*(buf_width)+new_pos.y;
 	atomicMin(col_depth[index],point);
-
-	/*if (pt_depth <= 1.0){
-		imageStore(final, ivec3(new_pos,22), color);
-		imageStore(final, ivec3(new_pos.x-1,new_pos.y,22), color);
-		imageStore(final, ivec3(new_pos.x+1,new_pos.y,22), color);
-	}*/
 }

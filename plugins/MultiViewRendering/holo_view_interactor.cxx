@@ -978,11 +978,16 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!resolve_compute_shader.build_program(ctx, "compute_resolve.glpr", true))
 		return false;
+	if (!geometry_resolve.build_program(ctx, "compute_resolve_geometry.glpr", true))
+		return false;
 	if (!backwards_shader.build_program(ctx, "backwards.glpr", true))
 		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
+
+	glGenBuffers(1, &ssbo);
+	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height), nullptr, GL_DYNAMIC_COPY);
 
 	return true;
 }
@@ -1229,6 +1234,8 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 									  res.y(), tessellator::VA_TEXCOORD);
 		heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
 										   res.x(), res.y(), tessellator::VA_TEXCOORD);
+		heightmap_resolve = tessellator::quad(ctx, geometry_resolve, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+											  res.x(), res.y(), tessellator::VA_TEXCOORD);
 	}
 }
 
@@ -1467,65 +1474,122 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 	double aspect = (double)view_width / view_height;
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+	float views_x_extent = eye_distance * y_extent_at_focus * aspect;
 	float shear =
 		  (eye_target[0] - eye_source[0][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
-	texture &color_tex = *render_fbo[0].attachment_texture_ptr("color"),
-			&depth_tex = *render_fbo[0].attachment_texture_ptr("depth");
+	texture &color_tex0 = *render_fbo[0].attachment_texture_ptr("color"),
+			&depth_tex0 = *render_fbo[0].attachment_texture_ptr("depth"),
+			&color_tex1 = *render_fbo[1].attachment_texture_ptr("color"),
+			&depth_tex1 = *render_fbo[1].attachment_texture_ptr("depth"),
+			&color_tex2 = *render_fbo[2].attachment_texture_ptr("color"),
+			&depth_tex2 = *render_fbo[2].attachment_texture_ptr("depth");
 
 	compute_shader.enable(ctx);
 
-	glDeleteBuffers(1, &ssbo);
-	glGenBuffers(1, &ssbo);
-	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height), nullptr, GL_DYNAMIC_COPY);
+	GLubyte val = 0;
+	glClearNamedBufferData(ssbo, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &val);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
-	glBindImageTexture(0, (int&)color_tex.handle - 1, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	//glBindImageTexture(1, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	color_tex0.enable(ctx, 0);
+	compute_shader.set_uniform(ctx, "color_tex0", 0);
+	depth_tex0.enable(ctx, 1);
+	compute_shader.set_uniform(ctx, "depth_tex0", 1);
+	//depth_tex1.enable(ctx, 1);
+	//compute_shader.set_uniform(ctx, "depth_tex1", 1);
+	//depth_tex2.enable(ctx, 2);
+	//compute_shader.set_uniform(ctx, "depth_tex2", 2);
 
-	depth_tex.enable(ctx, 0);
-	compute_shader.set_uniform(ctx, "depth_tex", 0);
+	//65535 available for each dimension for work group (defined in gldispatchcompute)
+	//for work group size (defined in cs) it is (1024, 1024, 64)
+	//max number of work group invocations: 1024
 
 	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);
 	compute_shader.set_uniform(ctx, "eye_source", eye_source[0]);
 	compute_shader.set_uniform(ctx, "eye_target", eye_target);
+	compute_shader.set_uniform(ctx, "views_x_extent", views_x_extent);
+	compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
 	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "epsilon", epsilon);
 	compute_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 	compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
+	compute_shader.set_uniform(ctx, "buf_height", (int)view_height);
 
 	glDispatchCompute(view_width, view_height, 1);
 	
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_READ_ONLY, GL_RGBA32F);
-	//glBindImageTexture(1, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+
 	compute_shader.disable(ctx);
 }
 
 void holo_view_interactor::resolve_pass_compute_shader(cgv::render::context& ctx)
 {
+	/* layered_fbo.destruct(ctx);
+	layered_depth_tex.destruct(ctx);
+	layered_color_tex.destruct(ctx);
+	layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+	layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+	layered_fbo.create(ctx, view_width, view_height);
+
+	geometry_resolve.enable(ctx);
+	vi = 0;
+	while (vi < nr_holo_views) {
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+
+		geometry_resolve.set_uniform(ctx, "buf_height", (int)view_height);
+		geometry_resolve.set_uniform(ctx, "buf_width", (int)view_width);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, (unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glDisable(GL_CULL_FACE);
+		heightmap_resolve.draw(ctx);
+		glEnable(GL_CULL_FACE);
+
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+		for (int i = 0; i < 4; i++) {
+			glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle) - 1, GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
+							   (unsigned)((size_t)volume_holo_tex.handle) - 1, GL_TEXTURE_3D, 0, 0, 0, vi, view_width,
+							   view_height, 1);
+			if (++vi == nr_holo_views)
+				break;
+		}
+		if (vi == nr_holo_views)
+			break;
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+	geometry_resolve.disable(ctx);*/
+
 	resolve_compute_shader.enable(ctx);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
-	uint32_t z = 0;
-	glClearTexImage((int&)volume_holo_tex.handle - 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &z);
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	resolve_compute_shader.set_uniform(ctx, "buf_width", (int)view_width);
-	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", nr_holo_views);
+	resolve_compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
 
 	glDispatchCompute(view_width, view_height, 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
 	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	resolve_compute_shader.disable(ctx);
 }
@@ -1592,7 +1656,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				break;
 		}
 
-		if (multiview_mpx_mode == MVM_COMPUTE) {
+		if (multiview_mpx_mode == MVM_COMPUTE){
 			warp_compute_shader(ctx);
 			resolve_pass_compute_shader(ctx);
 		}
@@ -1647,7 +1711,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			}
 		}
 
-		if (multiview_mpx_mode == MVM_COMPUTE) {
+		if (multiview_mpx_mode == MVM_COMPUTE){
 			warp_compute_shader(ctx);
 			resolve_pass_compute_shader(ctx);
 		}

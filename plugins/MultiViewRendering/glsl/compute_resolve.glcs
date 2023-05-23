@@ -16,7 +16,7 @@ void main()
 {  	
 	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
-	int index = coord.x+coord.y*buf_width;
+	int index = coord.x*buf_width+coord.y;
 	int color_int = col_depth[index];
 
 	uint mask;
@@ -37,4 +37,5 @@ void main()
 	imageStore(color_tex, ivec3(coord,22), color);
 	imageStore(color_tex, ivec3(coord.x-1,coord.y,22), color);
 	imageStore(color_tex, ivec3(coord.x+1,coord.y,22), color);
+	
 }
