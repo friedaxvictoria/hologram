@@ -1487,8 +1487,8 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 	compute_shader.enable(ctx);
 
-	GLubyte val = 0;
-	glClearNamedBufferData(ssbo, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, &val);
+	GLint val = (1 << 24) | (0 << 16) | (0 << 8) |1;
+	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_INT, &val);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 

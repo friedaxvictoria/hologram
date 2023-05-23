@@ -56,8 +56,16 @@ void main()
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
-	int point = (depth << 24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
+	//if (pt_depth > 1.0)
+	color_bytes.a = 0;
+	int point = (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
-	int index = new_pos.x*(buf_width)+new_pos.y;
-	atomicMin(col_depth[index],point);
+	//in theory
+	//int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
+
+	int index = new_pos.x+new_pos.y*buf_width;
+
+	atomicAdd(col_depth[index],point);
+
+	//atomicMin(col_depth[index],point);
 }
