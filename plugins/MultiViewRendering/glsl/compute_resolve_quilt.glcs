@@ -2,10 +2,9 @@
 
 layout (local_size_x = 1, local_size_y = 1) in;
 
-layout(binding = 0, rgba32f) uniform writeonly image3D color_tex;
+layout(binding = 0, rgba32f) uniform writeonly image2D color_tex;
 
 uniform int screen_w;
-uniform int screen_h;
 uniform int quilt_cols;
 
 layout(std430, binding = 0) buffer storage_buffer
@@ -38,9 +37,6 @@ void main()
 
 	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,alpha/255.0);
 
-	if (alpha != 0){
-		int current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
-		vec2 image_coord = vec2(coord.x%screen_w,coord.y%screen_h);
-		imageStore(color_tex, ivec3(image_coord,current_view), color);
-	}
+	if (alpha != 0)
+		imageStore(color_tex, coord, color);
 }
