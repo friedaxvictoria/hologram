@@ -17,26 +17,23 @@ void main()
 	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
 	int index = coord.x+coord.y*(screen_w*quilt_cols);
-	int color_int = col_depth[index];
 
-	uint mask;
-	mask = ((1 << 8) - 1) << 24;
-	uint red = color_int & mask;
-	red = red >> 24;
+	int left = index-1; 
+	int right = index+1;
+	if (coord.x == 0)
+		left = index;
+	else if (coord.x%screen_w == 0)
+		right = index;
+	int color_int_left = col_depth[left];
+	int color_int_right = col_depth[right];
 
-	mask = ((1 << 8) - 1) << 16;
-	uint green = color_int & mask;
-	green = green >> 16;
-
-	mask = ((1 << 8) - 1) << 8;
-	uint blue = color_int & mask;
-	blue = blue >> 8;
-
-	mask = ((1 << 8) - 1) << 0;
-	uint alpha = color_int & mask;
-
-	vec4 color = vec4(red/255.0,green/255.0,blue/255.0,alpha/255.0);
+	//getting colours from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+	uint mask = ~(0xffffffff << 8);
+	float red = (((color_int_left >> 24) & mask) + ((color_int_right >> 24) & mask))/500.0;
+	float green = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
+	float blue = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
+	float alpha = ((color_int_left & mask) + (color_int_right) & mask)/500.0;
 
 	if (alpha != 0)
-		imageStore(color_tex, coord, color);
+		imageStore(color_tex, coord, vec4(red,green,blue,alpha));
 }

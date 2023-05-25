@@ -1470,7 +1470,6 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 
 void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 {
-
 	double aspect = (double)view_width / view_height;
 	float views_x_extent = eye_distance * y_extent_at_focus * aspect;
 	float shear = (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
@@ -1488,9 +1487,9 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
-	color_tex0.enable(ctx, 0);
+	color_tex2.enable(ctx, 0);
 	compute_shader.set_uniform(ctx, "color_tex0", 0);
-	depth_tex0.enable(ctx, 1);
+	depth_tex2.enable(ctx, 1);
 	compute_shader.set_uniform(ctx, "depth_tex0", 1);
 	//depth_tex1.enable(ctx, 1);
 	//compute_shader.set_uniform(ctx, "depth_tex1", 1);
@@ -1501,8 +1500,8 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	//for work group size (defined in cs) it is (1024, 1024, 64)
 	//max number of work group invocations: 1024
 
-	compute_shader.set_uniform(ctx, "p_source", proj_source[0]);
-	compute_shader.set_uniform(ctx, "eye_source", eye_source[0]);
+	compute_shader.set_uniform(ctx, "p_source", proj_source[2]);
+	compute_shader.set_uniform(ctx, "eye_source", eye_source[2]);
 	compute_shader.set_uniform(ctx, "start_x", - views_x_extent / 2);
 	compute_shader.set_uniform(ctx, "x_offset", views_x_extent / nr_holo_views);
 	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
