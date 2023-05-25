@@ -29,7 +29,8 @@ void main()
 	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
 	vec2 texcoord = vec2((global_coord.x%screen_w)/float(screen_w), (global_coord.y%screen_h)/float(screen_h));
 
-	int current_view = int(global_coord.x/float(screen_w)) + int(global_coord.y/float(screen_h))*quilt_cols;
+	int x_index = int(global_coord.x/float(screen_w));
+	int current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
 	vec4 eye_target = vec4(start_x + current_view*x_offset, 0, 0, 1);
 
 	vec4 color = textureLod(color_tex0, texcoord, 0);
@@ -41,14 +42,14 @@ void main()
 	vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
-	intersection_z_far.x = intersection_z_far.x - shear * (eye_target.x - eye_source.x) ;
+	intersection_z_far.x -=  shear * (eye_target.x - eye_source.x) ;
 
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
 	float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-	ivec2 new_pos = ivec2(round(x_window * screen_w + global_coord.x - (global_coord.x%screen_w)), global_coord.y);
+	int new_pos_x = clamp(int(round((x_window+x_index) * screen_w)),0,(x_index+1)*screen_w);
 
 	ivec4 color_bytes = ivec4(color * 255);
 	int depth = floatBitsToInt(pt_depth);
@@ -58,7 +59,7 @@ void main()
 	//int64_t depth = floatBitsToInt(pt_depth);
 	//int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
-	int index = new_pos.x+new_pos.y*(screen_w*quilt_cols);
+	int index = new_pos_x+global_coord.y*(screen_w*quilt_cols);
 
 	//atomicMin(col_depth[index],point);
 	//if statement can be eliminated once depth is taken into account
