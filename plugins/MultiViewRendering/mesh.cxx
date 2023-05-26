@@ -387,7 +387,7 @@ void mesh_viewer::draw_geometry_shader(context& ctx)
 
 	test.geometry_shader.set_uniform(ctx, "eye_sep", test.eye_distance);
 	test.geometry_shader.set_uniform(ctx, "eye", test.eye);
-	test.geometry_shader.set_uniform(ctx, "num_holo_views", test.num_holo_views);
+	test.geometry_shader.set_uniform(ctx, "eye_offset", 2/float(test.num_holo_views));
 	test.geometry_shader.set_uniform(ctx, "zero_parallax", test.zero_parallax);
 	test.geometry_shader.set_uniform(ctx, "culling_mode", (int)cull_mode);
 	test.geometry_shader.set_uniform(ctx, "map_color_to_material", (int)color_mapping);

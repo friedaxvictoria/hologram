@@ -15,7 +15,7 @@ uniform float eye_sep;
 //index of the first view position for this geometry shader call
 uniform float eye;
 //how far is one eye away from the next --> depends on amount of views
-uniform float num_holo_views;
+uniform float eye_offset;
 uniform float zero_parallax;
 
 out vec3 normal_eye;
@@ -30,8 +30,8 @@ mat4 get_projection_matrix();
 void main()
 {
 	mat4 p = get_projection_matrix();
-	p[2][0] = -eye_sep * (eye + gl_InvocationID * 2/num_holo_views);
-	p[3][0] = -zero_parallax * eye_sep * (eye + gl_InvocationID * 2/num_holo_views);
+	p[2][0] = -eye_sep * (eye + gl_InvocationID * eye_offset);
+	p[3][0] = -zero_parallax * eye_sep * (eye + gl_InvocationID * eye_offset);
 
 	for (int i = 0; i<3; i++){
 		normal_eye = gs_in[i].normal_eye_gs;
