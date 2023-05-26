@@ -133,7 +133,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned quilt_nr_rows = 9;
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
-	float heightmap_oversampling = 1.f; // oversampling factor of the heightmap (to be able to resolve finer details)
 	float w = 1.0;
 
   protected:
@@ -245,7 +244,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void warp_compute_shader(cgv::render::context& ctx);
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
-	void compute_holo_views_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void enable_warp_fb(cgv::render::context& ctx);
 

@@ -1213,24 +1213,18 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 	// center one)
 	time_start = std::chrono::high_resolution_clock::now();
 	auto& fb = render_fbo[1].ref_frame_buffer();
-	if (fb.get_width() != (int)float(view_width * heightmap_oversampling) ||
-		fb.get_height() != (int)float(view_height * heightmap_oversampling))
+	if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height)
 	{
-		// set resolution according to oversampling factor
-		render_fbo[0].set_size(
-			  {(int)float(view_width * heightmap_oversampling),
-								(int)float(view_height * heightmap_oversampling)});
+		render_fbo[0].set_size({(int)view_width,(int)view_height});
 		render_fbo[0].ensure(ctx);
-		render_fbo[1].set_size(render_fbo[0].get_size());
+
+		const auto res = render_fbo[0].get_size();
+		render_fbo[1].set_size(res);
 		render_fbo[1].ensure(ctx);
-		render_fbo[2].set_size(render_fbo[1].get_size());
+		render_fbo[2].set_size(res);
 		render_fbo[2].ensure(ctx);
 
-		// (re-)tessellate our heightmap
-		// - get view frustum information
-		const auto res = render_fbo[1].get_size();
 		const float half_aspect = (float)res.x() / (2 * res.y());
-		// - tesselate
 		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(),
 									  res.y(), tessellator::VA_TEXCOORD);
 		heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
@@ -1898,8 +1892,6 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
 							   "min=2;max=100;ticks=true");
 			add_member_control(this, "w", w, "value_slider", "min=0;max=3;ticks=true");
-			add_member_control(this, "Oversample Heightmap", heightmap_oversampling, "value_slider",
-							   "min=0.5;max=4;step=0.5");
 			add_member_control(this, "Epsilon", epsilon, "value_slider", "min=0;max=0.1;step=0.00001;ticks=true");
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
@@ -2029,7 +2021,6 @@ bool holo_view_interactor::self_reflect(cgv::reflect::reflection_handler& srh)
 		   srh.reflect_member("quilt_nr_cols", quilt_nr_cols) && srh.reflect_member("quilt_nr_rows", quilt_nr_rows) &&
 		   srh.reflect_member("quilt_interpolate", quilt_interpolate) &&
 		   srh.reflect_member("dis_artefacts", dis_artefacts) && srh.reflect_member("show_holes", show_holes) &&
-		   srh.reflect_member("heightmap_oversampling", heightmap_oversampling) &&
 		   srh.reflect_member("epsilon", epsilon);
 }
 

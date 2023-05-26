@@ -67,74 +67,14 @@ class mesh_viewer :
 
 	cgv::render::stereo_view* view = nullptr;
 
-	float eye_distance;
-
 	vec3 cam_dir;
 
-	////
-	// 3D Image Warp baseline testing fields
+	shader_program geometry_shader; // the mesh-based baseline approach
+	shader_program holes_shader;	// for displaying the holes
 
-	struct
-	{
-		enum WarpMode { BASELINE, IMAGE_WARP };
-		WarpMode warp_mode = IMAGE_WARP;
-
-		// Render targets for each fully rendered view - we allocate enough for 3 viewpoints:
-		// 0-left, 1-center, 2-right
-		cgv::render::managed_frame_buffer render_fbo[3];
-
-		// our base projection matrix
-		mat4 inv_mat_proj_render[3];
-		mat4 proj_for_render;
-
-		// image warping test shaders
-		shader_program baseline_shader; // the mesh-based baseline approach
-		shader_program holes_shader;	// for displaying the holes
-		shader_program warp_shader;		// the image warping approach
-		shader_program geometry_shader;		// the image warping approach
-
-		// image warping shader parameters
-		bool prune_heightmap =
-			  true; // discard heightmap fragments which don't represent valid geometry (from "empty" areas)
-		float heightmap_oversampling =
-			  2.f; // oversampling factor of the heightmap (to be able to resolve finer details)
-
-		// Mesh for the heightmap geometry (actually the same for all three views,
-		// since the topology never changes!)
-		GPUgeometry heightmap_baseline, heightmap_warp;
-
-		// transformation matrix for positioning the heightmap at the plane behind the scene from
-		// which it was shot
-		mat4 heightmap_trans;
-		mat4 modelview_source;
-
-		// whether to render the heightmap
-		bool render_heightmap = false;
-
-		// indicates that a snapshot of the current view should be safed in the heightmap
-		bool shoot_heightmap;
-
-		int visible_view = 22;
-
-		int nr_renders = 3;
-		float render_offset[3];
-
-		bool show_holes = true;
-		bool with_interpolated_holes = false;
-		bool nr_rendered_views_changed = false;
-
-		float epsilon = 0.02;
-
-		bool ortho = false;
-
-		float x_ext, y_ext, znear;
-		vec3 eye_source[3], eye_target;
-
-		mat3 p_1[3];
-
-		float zero_parallax, eye_distance, num_holo_views, eye;
-		bool with_geometry = false;
-	} test;
+	// variables for geometry shader render call
+	float zero_parallax, eye_distance, num_holo_views, eye;
+	bool with_geometry = false;
 
 	public:
 		mesh_viewer();
@@ -156,7 +96,5 @@ class mesh_viewer :
 		void draw(context& ctx);
 		void finish_frame(context& ctx);
 		bool self_reflect(cgv::reflect::reflection_handler& srh);
-		void on_shoot(void);
-		void nr_rendered_views_change(void);
 		void create_gui();
    };

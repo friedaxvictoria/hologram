@@ -93,8 +93,6 @@ mesh_viewer::mesh_viewer() : node("mesh_viewer")
 	cone_style.surface_color = rgb(0.6f, 0.5f, 0.4f);
 
 	eye_distance = 0.3f;
-
-	nr_rendered_views_change();
 }
 
 /// reflect the name of our class
@@ -141,13 +139,13 @@ void mesh_viewer::process_mesh_for_rendering(context& ctx, bool update_view = tr
 	mesh_for_geo_info.destruct(ctx);
 	mesh_for_geo_info.construct(ctx, M);
 	// bind mesh attributes to standard surface shader program
-	mesh_for_geo_info.bind(ctx, test.geometry_shader, true);
+	mesh_for_geo_info.bind(ctx, geometry_shader, true);
 	mesh_for_geo_info.bind_wireframe(ctx, ref_cone_renderer(ctx).ref_prog(), true);
 
 	// [re-]compute mesh render info for visualising the holes
 	mesh_for_holes_info.destruct(ctx);
 	mesh_for_holes_info.construct(ctx, M);
-	mesh_for_holes_info.bind(ctx, test.holes_shader, true);
+	mesh_for_holes_info.bind(ctx, holes_shader, true);
 
 	// update sphere attribute array manager
 	sphere_renderer& sr = ref_sphere_renderer(ctx);
@@ -190,28 +188,6 @@ void mesh_viewer::ensure_mesh_colors()
 	}
 }
 
-/// react to mouse & keyboard events
-bool mesh_viewer::handle(cgv::gui::event& e)
-{
-	if (e.get_kind() == cgv::gui::EID_KEY) {
-		const auto& ke = static_cast<cgv::gui::key_event&>(e);
-		const auto ka = ke.get_action();
-
-		switch (ke.get_key()) {
-		case Keys::KEY_Enter:
-			if (ka == KeyAction::KA_PRESS && !test.shoot_heightmap) {
-				test.shoot_heightmap = true;
-				post_redraw();
-				return true;
-			}
-		default:
-			  /* DoNothing() */;
-		}
-	}
-
-	return false;
-}
-
 /// output help text for keyboard shortcuts
 void mesh_viewer::stream_help(std::ostream& os)
 {
@@ -236,16 +212,6 @@ void mesh_viewer::on_set(void* member_ptr)
 			M.destruct_colors();
 		process_mesh_for_rendering(*get_context(), false);
 	}
-
-	////
-	// SECTION: 3D image warping baseline test
-
-	// react to changed heightmap oversampling factor
-	if (member_ptr == &test.heightmap_oversampling)
-		test.render_fbo->set_size({-1, -1}); // causes FBO and heightmap regeneration during ::init_frame()
-
-	// END: 3D image warping baseline test
-	////
 
 	update_member(member_ptr);
 	post_redraw();
@@ -274,31 +240,18 @@ bool mesh_viewer::init(context& ctx)
 	// in the blank state (without anything loaded), we just display a simple Conway polyhedron
 	create_conway_polyhedron();
 
-	////
-	// SECTION: 3D image warping baseline test
+	success &= holes_shader.build_program(ctx, "holes.glpr", true);
+	success &= geometry_shader.build_program(ctx, "geometry.glpr", true);
 
-	// create our offscreem framebuffers used to test image warping
-	for (unsigned i = 0; i < 3; i++) {
-		test.render_fbo[i].add_attachment("depth", "[D]");
-		test.render_fbo[i].add_attachment("color", "uint8[R,G,B,A]");
-	}
-
-	// init our baseline method test shaders
-	success &= test.baseline_shader.build_program(ctx, "baseline.glpr", true);
-	success &= test.warp_shader.build_program(ctx, "warp.glpr", true);
-	success &= test.holes_shader.build_program(ctx, "holes.glpr", true);
-	success &= test.geometry_shader.build_program(ctx, "geometry.glpr", true);
-
-	test.geometry_shader.specify_standard_uniforms(true, true, true, true);
-	test.geometry_shader.specify_standard_vertex_attribute_names(ctx, true, true, true);
-	test.geometry_shader.allow_context_to_set_color(true);
-
-	// END: 3D image warping baseline test
-	////
+	geometry_shader.specify_standard_uniforms(true, true, true, true);
+	geometry_shader.specify_standard_vertex_attribute_names(ctx, true, true, true);
+	geometry_shader.allow_context_to_set_color(true);
 
 	// report success (or lack thereof)
 	return success;
 }
+
+bool mesh_viewer::handle(cgv::gui::event& e) { return true; };
 
 /// unload any currently loaded mesh data
 void mesh_viewer::clear(context& ctx)
@@ -310,45 +263,7 @@ void mesh_viewer::clear(context& ctx)
 	cone_aam.destruct(ctx);
 }
 
-/// perform any kind of operation that should take place before all drawables start executing their ::draw()
-/// methods
-void mesh_viewer::init_frame(context& ctx)
-{
-	////
-	// SECTION: 3D image warping baseline test
-
-	// check if render fbo needs re-initialization (we always change all 3 at the same time, so we just check the
-	// center one)
-	auto& fb = test.render_fbo[1].ref_frame_buffer();
-	if (fb.get_width() != (int)float(ctx.get_width() * test.heightmap_oversampling) ||
-		fb.get_height() != (int)float(ctx.get_height() * test.heightmap_oversampling))
-	{
-		// set resolution according to oversampling factor
-		test.render_fbo[0].set_size({(int)float(ctx.get_width() * test.heightmap_oversampling),
-									 (int)float(ctx.get_height() * test.heightmap_oversampling)});
-		test.render_fbo[0].ensure(ctx);
-		test.render_fbo[1].set_size(test.render_fbo[0].get_size());
-		test.render_fbo[1].ensure(ctx);
-		test.render_fbo[2].set_size(test.render_fbo[1].get_size());
-		test.render_fbo[2].ensure(ctx);
-
-		// (re-)tessellate our heightmap
-		// - get view frustum information
-		const auto res = test.render_fbo[1].get_size();
-		const float half_aspect = (float)res.x() / (2 * res.y());
-		// - tesselate
-		test.heightmap_baseline = tessellator::quad(ctx, test.baseline_shader, {-half_aspect, -.5f, .0f},
-													{half_aspect, .5f, .0f}, res.x(), res.y());
-		test.heightmap_warp = tessellator::quad(ctx, test.warp_shader, {-half_aspect, -.5f, .0f},
-												{half_aspect, .5f, .0f}, res.x(), res.y());
-
-		// make sure we re-shoot the heightmap
-		test.shoot_heightmap = true;
-	}
-
-	// END: 3D image warping baseline test
-	////
-}
+void mesh_viewer::init_frame(context& ctx){}
 
 void mesh_viewer::draw_holes(context& ctx)
 {
@@ -363,11 +278,11 @@ void mesh_viewer::draw_holes(context& ctx)
 
 void mesh_viewer::set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views)
 {
-	test.zero_parallax = zero_parallax;
-	test.eye_distance = eye_distance;
-	test.eye = eye;
-	test.num_holo_views = num_holo_views;
-	test.with_geometry = true;
+	mesh_viewer::zero_parallax = zero_parallax;
+	mesh_viewer::eye_distance = eye_distance;
+	mesh_viewer::eye = eye;
+	mesh_viewer::num_holo_views = num_holo_views;
+	with_geometry = true;
 }
 
 void mesh_viewer::draw_geometry_shader(context& ctx)
@@ -385,13 +300,13 @@ void mesh_viewer::draw_geometry_shader(context& ctx)
 	else
 		glDisable(GL_CULL_FACE);
 
-	test.geometry_shader.set_uniform(ctx, "eye_sep", test.eye_distance);
-	test.geometry_shader.set_uniform(ctx, "eye", test.eye);
-	test.geometry_shader.set_uniform(ctx, "eye_offset", 2/float(test.num_holo_views));
-	test.geometry_shader.set_uniform(ctx, "zero_parallax", test.zero_parallax);
-	test.geometry_shader.set_uniform(ctx, "culling_mode", (int)cull_mode);
-	test.geometry_shader.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
-	test.geometry_shader.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
+	geometry_shader.set_uniform(ctx, "eye_sep", eye_distance);
+	geometry_shader.set_uniform(ctx, "eye", eye);
+	geometry_shader.set_uniform(ctx, "eye_offset", 2/float(num_holo_views));
+	geometry_shader.set_uniform(ctx, "zero_parallax", zero_parallax);
+	geometry_shader.set_uniform(ctx, "culling_mode", (int)cull_mode);
+	geometry_shader.set_uniform(ctx, "map_color_to_material", (int)color_mapping);
+	geometry_shader.set_uniform(ctx, "illumination_mode", (int)illumination_mode);
 
 	ctx.set_color(surface_color);
 
@@ -444,224 +359,6 @@ void mesh_viewer::draw_surface(context& ctx, bool opaque_part)
 /// the "main" draw method
 void mesh_viewer::draw(context& ctx)
 {
-	////
-	// SECTION: 3D image warping baseline test
-
-	// --NOTE-- bind appropriate render_fbo here (e.g. just render_fbo[1] for the
-	//          initial mono depth map test case)
-	/* test.render_heightmap = true;
-
-	if (test.shoot_heightmap) {
-		static const vec3 right_local(1, 0, 0);
-		const mat4 invMV = inv(ctx.get_modelview_matrix());
-		cam_dir = view->get_view_dir();
-		const vec3 cam_pos = view->get_eye(), cam_right = normalize(w_clip(invMV.mul_pos(right_local)) - cam_pos),
-	cam_up = view->get_view_up_dir(); // --CAREFUL-- get_view_up_dir is not 100% reliable,
-													 // consider inferring from modelview matrix!
-		// - find out where the scene ends along world-space camera viewing direction
-		auto [bmin, bmax] = project_box_onto_dir(M_bbox, cam_dir);
-		// - find out how large the quad needs to be to fill the whole frustum at that point
-		const float cam_depth_world = dot(cam_pos, cam_dir), heightmap_depth_eye = bmax - cam_depth_world,
-					aspect = (float)ctx.get_width() / ctx.get_height();
-		test.y_ext = (float)view->get_y_extent_at_depth(heightmap_depth_eye, false);
-		test.x_ext = test.y_ext * aspect;
-		// - position the heightmap just behind the scene, facing the camera at the moment of capture:
-		//   M = Transl(cam_pos + cam_dir*heightmap_depth_eye) * Rot(cam_right, cam_up, cam_dir) * Scale(y_ext)
-		test.heightmap_trans = mat4({vec4(test.y_ext * cam_right, 0), vec4(test.y_ext * cam_up, 0), vec4(test.y_ext *
-	cam_dir, 0), vec4(cam_pos + cam_dir * heightmap_depth_eye, 1)}); test.modelview_source = ctx.get_modelview_matrix()
-	* test.heightmap_trans;
-
-		const float x_ext_half = 0.5f * test.x_ext, y_ext_half = 0.5f * test.y_ext;
-		test.znear = bmin - cam_depth_world;
-
-		// change projection matrix to orthogonal according to the current (view-dependent) extends of our
-		// heightmap or use perspective projection matrix
-		if (!test.ortho)
-			test.proj_for_render = ctx.get_projection_matrix();
-		else
-			test.proj_for_render = ortho4(-x_ext_half, x_ext_half, -y_ext_half, y_ext_half, test.znear,
-	heightmap_depth_eye);
-	}
-
-	for (int i = 0; i < test.nr_renders; i++) {
-		if (test.shoot_heightmap || (test.nr_rendered_views_changed && test.render_heightmap)) {
-			test.render_fbo[i].enable(ctx);
-			// make the heightmap quad very slightly visible even where it doesn't contain scene geometry
-			// glClearColor(.03125f, .03125f, .03125f, 1.f);
-
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			// move the heightmap to the correct place in world-space
-			// - determine the camera orientation
-
-			float x_of_cam = 0.5f * test.render_offset[i] * view->get_eye_distance() * test.x_ext;
-			test.eye_source[i] = vec3(x_of_cam, 0, 0);
-
-			mat4 shear, translate;
-			shear.identity();
-			shear(0, 2) = x_of_cam / view->get_depth_of_focus();
-
-			translate.identity();
-			translate(0, 3) = x_of_cam;
-
-			test.inv_mat_proj_render[i] = inv(test.proj_for_render * shear * translate);
-			std::cout << "proj in mesh: " << i << ", "<< test.inv_mat_proj_render[i] << std::endl;
-
-			// test.p_1[i] = compute_frustum_model_image_warp(-test.x_ext/2, test.x_ext/2, -test.y_ext/2,
-			// test.y_ext, ctx.get_width(), ctx.get_height(), test.znear);
-
-			ctx.push_projection_matrix();
-			ctx.set_projection_matrix(inv(test.inv_mat_proj_render[i]));
-			ctx.push_modelview_matrix();
-			ctx.set_modelview_matrix(test.modelview_source * inv(test.heightmap_trans));
-		}
-
-
-
-		// END: 3D image warping baseline test
-		////
-
-		 if (show_vertices && (test.shoot_heightmap || !test.render_heightmap))
-		{
-			sphere_renderer& sr = ref_sphere_renderer(ctx);
-			sr.set_render_style(sphere_style);
-			sr.enable_attribute_array_manager(ctx, sphere_aam);
-			sr.render(ctx, 0, M.get_nr_positions());
-			sr.disable_attribute_array_manager(ctx, sphere_aam);
-		}
-		if (show_wireframe && (test.shoot_heightmap || !test.render_heightmap)) {
-			cone_renderer& cr = ref_cone_renderer(ctx);
-			cr.set_render_style(cone_style);
-			if (cr.enable(ctx)) {
-				mesh_info.draw_wireframe(ctx);
-				cr.disable(ctx);
-			}
-		}
-		if (show_surface && (test.shoot_heightmap || !test.render_heightmap || test.nr_rendered_views_changed))
-			draw_surface(ctx, false); // --NOTE-- set parameter to true once done testing the image warp to
-									  // re-enable correct handling of transparent mesh parts
-
-		// draw the mesh bounding box if we're not currently capturing the heightmap
-		if (show_bbox && !test.shoot_heightmap)
-			M_bbox_rd.render(ctx, ref_box_wire_renderer(ctx), box_wire_render_style());
-
-		////
-		// SECTION: 3D image warping baseline test
-
-		// --NOTE-- Disable the render_fbo to make the "main" framebuffer active again.
-		//          Render a single test view (e.g. selectable via GUI) by rendering the
-		//          heightmap mesh using the corresponding transformation while the color
-		//          and depth buffer for the central view are actively bound to the appropriate
-		//          texture units (so the vertex shader can offset and color the vertices
-		//          accordingly).
-		//          For the other warping approaches, you would only draw a screen quad (see
-		//          holo_view_interactor!) and the fragment shader would do the main work
-
-		// we only position the heightmap in space when it's being "shot", it will remain there afterwards
-		// so it can be inspected from all sides and compared to the "real" scene
-		if (test.shoot_heightmap || (test.nr_rendered_views_changed && test.render_heightmap)) {
-			// disable the offscreen framebuffer and reset projection matrix
-			test.render_fbo[i].disable(ctx);
-			ctx.pop_projection_matrix();
-			ctx.pop_modelview_matrix();
-
-			// shoot complete
-			if (i == test.nr_renders-1) {
-				test.shoot_heightmap = false;
-				test.nr_rendered_views_changed = false;
-			}
-
-			// post a redraw so the scene is rendered once more into the main framebuffer (at this point it will
-			// have only been drawn into the offscreen framebuffer)
-			post_redraw();
-		}
-
-	}
-
-	if (test.render_heightmap) {
-
-		test.eye_target =
-			  vec3(0.5f * (2.0f*test.visible_view / 44.0 - 1.0f) * view->get_eye_distance() * test.x_ext, 0, 0);
-
-		mat3 p_2 = compute_frustum_model_image_warp(-test.x_ext / 2, test.x_ext / 2, -test.y_ext / 2, test.y_ext,
-													ctx.get_width(), ctx.get_height(), test.znear);
-
-		if (test.show_holes) {
-			// render pass for displaying holes when warping in green
-			glDisable(GL_CULL_FACE);
-			glDisable(GL_DEPTH_TEST);
-
-			mesh_for_holes_info.draw_all(ctx);
-
-			glEnable(GL_CULL_FACE);
-			glEnable(GL_DEPTH_TEST);
-		}
-
-		if (test.warp_mode == test.BASELINE) {
-			for (int i = 0; i < test.nr_renders; i++) {
-
-				texture &color_tex = *test.render_fbo[i].attachment_texture_ptr("color"),
-						&depth_tex = *test.render_fbo[i].attachment_texture_ptr("depth");
-				// render pass for baseline approach
-				color_tex.enable(ctx, 0);
-				test.baseline_shader.set_uniform(ctx, "color", 0);
-				depth_tex.enable(ctx, 1);
-				test.baseline_shader.set_uniform(ctx, "depth", 1);
-
-				test.baseline_shader.set_uniform(ctx, "inv_proj_source", test.inv_mat_proj_render[i]);
-				test.baseline_shader.set_uniform(ctx, "modelview_source", test.modelview_source);
-				test.baseline_shader.set_uniform(ctx, "prune_empty", test.prune_heightmap);
-				test.baseline_shader.set_uniform(ctx, "with_interpolated_holes",
-												 test.with_interpolated_holes && test.render_offset[i] == 0.0f);
-				test.baseline_shader.set_uniform(ctx, "epsilon", test.epsilon);
-
-				test.baseline_shader.enable(ctx);
-				glDisable(GL_CULL_FACE);
-				ctx.push_modelview_matrix();
-				ctx.mul_modelview_matrix(test.heightmap_trans);
-				test.heightmap_baseline.draw(ctx);
-				ctx.pop_modelview_matrix();
-				glEnable(GL_CULL_FACE);
-				test.baseline_shader.disable(ctx);
-				depth_tex.disable(ctx);
-				color_tex.disable(ctx);
-			}
-		}
-		else {
-			for (int i = 0; i < test.nr_renders; i++) {
-
-				texture &color_tex = *test.render_fbo[i].attachment_texture_ptr("color"),
-						&depth_tex = *test.render_fbo[i].attachment_texture_ptr("depth");
-
-				color_tex.enable(ctx, 0);
-				test.warp_shader.set_uniform(ctx, "color", 0);
-				depth_tex.enable(ctx, 1);
-				test.warp_shader.set_uniform(ctx, "depth", 1);
-
-				test.warp_shader.set_uniform(ctx, "p_1", test.p_1[i]);
-				test.warp_shader.set_uniform(ctx, "p_2", p_2);
-				test.warp_shader.set_uniform(ctx, "inv_mvp_source", inv(test.modelview_source) *
-	test.inv_mat_proj_render[i]); test.warp_shader.set_uniform(ctx, "eye_source", test.eye_source[i]);
-				test.warp_shader.set_uniform(ctx, "eye_target", test.eye_target);
-				test.warp_shader.set_uniform(ctx, "width", (float)(ctx.get_width() * test.heightmap_oversampling));
-				test.warp_shader.set_uniform(ctx, "height", (float)(ctx.get_height() * test.heightmap_oversampling));
-				test.warp_shader.set_uniform(ctx, "fac",
-											 fac);
-
-				test.warp_shader.enable(ctx);
-				glDisable(GL_CULL_FACE);
-				ctx.push_modelview_matrix();
-				ctx.mul_modelview_matrix(test.heightmap_trans);
-				test.heightmap_warp.draw(ctx);
-				ctx.pop_modelview_matrix();
-				glEnable(GL_CULL_FACE);
-				test.warp_shader.disable(ctx);
-				depth_tex.disable(ctx);
-				color_tex.disable(ctx);
-			}
-		}
-	} */
-
 	if (show_vertices) {
 		sphere_renderer& sr = ref_sphere_renderer(ctx);
 		sr.set_render_style(sphere_style);
@@ -678,19 +375,15 @@ void mesh_viewer::draw(context& ctx)
 		}
 	}
 	if (show_surface) {
-		if (test.with_geometry)
+		if (with_geometry)
 			draw_geometry_shader(ctx);
 		else
 			draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
 									 // re-enable correct handling of transparent mesh parts
 	}
 
-	// draw the mesh bounding box if we're not currently capturing the heightmap
 	if (show_bbox)
 		M_bbox_rd.render(ctx, ref_box_wire_renderer(ctx), box_wire_render_style());
-
-	// END: 3D image warping baseline test
-	////
 }
 
 /// perform any kind of operation that should take place after all drawables have executed their ::draw()
@@ -698,9 +391,9 @@ void mesh_viewer::draw(context& ctx)
 void mesh_viewer::finish_frame(context& ctx)
 {
 	if (show_surface)
-		if (test.with_geometry) {
+		if (with_geometry) {
 			draw_geometry_shader(ctx);
-			test.with_geometry = false;
+			with_geometry = false;
 
 		}
 		else
@@ -715,37 +408,7 @@ bool mesh_viewer::self_reflect(cgv::reflect::reflection_handler& srh)
 	return srh.reflect_member("mesh_filename", mesh_filename) &&
 		   srh.reflect_member("invent_missing_colors", invent_missing_colors) &&
 		   srh.reflect_member("show_bbox", show_bbox) && srh.reflect_member("show_surface", show_surface) &&
-		   srh.reflect_member("show_vertices", show_vertices) && srh.reflect_member("show_wireframe", show_wireframe) &&
-		   srh.reflect_member("test__render_heightmap", test.render_heightmap) &&
-		   srh.reflect_member("test__warp_mode", test.warp_mode) &&
-		   srh.reflect_member("test__heightmap_oversampling", test.heightmap_oversampling) &&
-		   srh.reflect_member("test__epsilon", test.epsilon) &&
-		   srh.reflect_member("test__nr_renders", test.nr_renders) &&
-		   srh.reflect_member("test__prune_heightmap", test.prune_heightmap) &&
-		   srh.reflect_member("test__with_interpolated_holes", test.with_interpolated_holes) &&
-		   srh.reflect_member("test__show_holes", test.show_holes) && srh.reflect_member("test__ortho", test.ortho);
-}
-
-/// define all GUI elements for our mesh viewer
-// - helper one-shot methods needed as button callbacks (until the framework properly supports C++ lambdas)
-void mesh_viewer::on_shoot(void)
-{
-	test.shoot_heightmap = true;
-	post_redraw();
-}
-
-void mesh_viewer::nr_rendered_views_change(void)
-{
-	test.nr_rendered_views_changed = true;
-	test.render_offset[1] = -1.0;
-	test.render_offset[2] = 1.0;
-	if (test.nr_renders == 1 || test.nr_renders == 3) {
-		test.render_offset[0] = 0.0;
-	}
-	else {
-		test.render_offset[0] = 1.0;
-	}
-	post_redraw();
+		   srh.reflect_member("show_vertices", show_vertices) && srh.reflect_member("show_wireframe", show_wireframe);
 }
 
 // - the actual method
@@ -812,41 +475,6 @@ void mesh_viewer::create_gui()
 		end_tree_node(show_surface);
 	}
 	add_member_control(this, "show bounding box", show_bbox, "check", "shortcut='b'");
-
-	////
-	// SECTION: 3D image warping baseline test
-
-	add_decorator("", "separator");
-	add_decorator("Stereo Viewing", "heading", "level=2");
-
-	add_decorator("", "separator");
-	add_decorator("Baseline 3D Image Warp", "heading", "level=2");
-	add_member_control(this, "render as heightmap", test.render_heightmap, "toggle", "shortcut='h'");
-	add_member_control(this, "Warp Mode", test.warp_mode, "dropdown", "enums='baseline, image_warp'");
-	add_member_control(this, "oversampling factor", test.heightmap_oversampling, "value_slider",
-					   "min=0.5;max=4;step=0.5;tooltip='multiply viewport resolution by this factor when "
-					   "determining heightmap resolution'");
-	add_member_control(this, "fac", fac, "value_slider",
-					   "min=0;max=0.5;step=0.00001;tooltip='how strong should the discarding of cliff artefacts be'");
-	add_member_control(this, "epsilon", test.epsilon, "value_slider",
-					   "min=0;max=0.1;step=0.00001;tooltip='how strong should the discarding of cliff artefacts be'");
-	add_member_control(this, "visible view", test.visible_view, "value_slider",
-					   "min=0;max=44;step=1;tooltip='change how many views are rendered properly'");
-	connect_copy(add_member_control(this, "nr rendered views", test.nr_renders, "value_slider",
-									"min=1;max=3;step=1;tooltip='change how many views are rendered properly'")
-					   ->value_change,
-				 cgv::signal::rebind(this, &mesh_viewer::nr_rendered_views_change));
-	add_member_control(this, "prune empty areas", test.prune_heightmap, "check",
-					   "tooltip='discard heightmap fragments which dont represent valid geometry';shortcut='p'");
-	add_member_control(this, "show holes", test.show_holes, "check");
-	add_member_control(this, "smooth holes into background", test.with_interpolated_holes, "check");
-	connect_copy(add_member_control(this, "with orthographic matix", test.ortho, "check")->value_change,
-				 cgv::signal::rebind(this, &mesh_viewer::on_shoot));
-	connect_copy(add_button("Shoot!", "tooltip='Updates the heightmap from the current view'")->click,
-				 cgv::signal::rebind(this, &mesh_viewer::on_shoot));
-
-	// END: 3D image warping baseline test
-	////
 }
 
 /// register the mesh_viewer drawable
