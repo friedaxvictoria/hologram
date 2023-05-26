@@ -1502,6 +1502,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "start_x", - views_x_extent / 2);
 	compute_shader.set_uniform(ctx, "x_offset", views_x_extent / nr_holo_views);
 	compute_shader.set_uniform(ctx, "nr_holo_views", nr_holo_views);
+	compute_shader.set_uniform(ctx, "nr_render_views", nr_render_views);
 	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "eye_sep", (float)eye_distance);

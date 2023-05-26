@@ -23,6 +23,7 @@ uniform int screen_w;
 uniform int screen_h;
 uniform int quilt_cols;
 uniform uint nr_holo_views;
+uniform uint nr_render_views;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
@@ -41,7 +42,7 @@ void main()
 	vec4 color;
 	float pt_depth;
 
-	for (int i = 0; i < 3; i++){
+	for (int i = 0; i < nr_render_views; i++){
 		if (i == 0){
 			color = textureLod(color_tex0, texcoord, 0);
 			pt_depth = textureLod(depth_tex0, texcoord, 0).r;
@@ -58,11 +59,13 @@ void main()
 		if (pt_depth >= 1.0)
 			color.a = 0;
 
-		vec4 eye_source = vec4(start_x * (1-i), 0, 0, 1);
+		float source_idx = nr_render_views == 1 ? 0.0 : (2.0f * i) / (nr_render_views - 1) - 1.0f;
+
+		vec4 eye_source = vec4(start_x * -source_idx, 0, 0, 1);
 
 		mat4 p_source = p_source_zero;
-		p_source[2][0] = -eye_sep * (i-1);
-		p_source[3][0] = -zero_parallax * eye_sep * (i-1);
+		p_source[2][0] = -eye_sep * source_idx;
+		p_source[3][0] = -zero_parallax * eye_sep * source_idx;
 
 		vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 		vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
