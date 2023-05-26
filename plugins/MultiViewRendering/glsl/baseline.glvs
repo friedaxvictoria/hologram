@@ -35,7 +35,8 @@ void main()
 	vec4 proj_two = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
 	direction_fs = normalize((proj_one - proj_two).xyz);
 	
+	// reproject point to new view
+	// modelview projection matrices are used to support translation in modelview matrix
 	pos_source_world = inv_mvp_source*vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*depth-1, 1);
-	
 	gl_Position = get_modelview_projection_matrix() * pos_source_world;
 }

@@ -4,9 +4,9 @@ layout (local_size_x = 1, local_size_y = 1) in;
 
 layout(binding = 0, rgba32f) uniform writeonly image3D color_tex;
 
-uniform int screen_w;
-uniform int screen_h;
-uniform int quilt_cols;
+uniform uint screen_w;
+uniform uint screen_h;
+uniform uint quilt_cols;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
@@ -17,16 +17,21 @@ void main()
 {  	
 	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
-	int index = coord.x+coord.y*screen_w*quilt_cols;
+	// get current color
+	uint index = coord.x+coord.y*screen_w*quilt_cols;
 	int color_at_point = col_depth[index];
 
-	int current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
+	// which view (z-value for 3D texture) is being calculated
+	uint current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
+
+	// calculate coordinates for texture: [0, screen_width) for x and [0, screen_height) for y
 	vec2 image_coord = vec2(coord.x%screen_w,coord.y%screen_h);
 
+	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
 	if (color_at_point%255 == 0){
 		vec4 color = vec4(1,0,0,1);
-		int left = index-1; 
-		int right = index+1;
+		uint left = index-1; 
+		uint right = index+1;
 		if (coord.x%screen_w == 0)
 			left=index;
 		else if (coord.x%screen_w == screen_w-1)
@@ -34,7 +39,7 @@ void main()
 		int color_int_left = col_depth[left];
 		int color_int_right = col_depth[right];
 
-		//getting colours from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		uint mask = ~(0xffffffff << 8);
 		float red = (((color_int_left >> 24) & mask) + ((color_int_right >> 24) & mask))/500.0;
 		float green = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
@@ -45,6 +50,7 @@ void main()
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red,green,blue,1));
 	}
 	else{
+		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		uint mask = ~(0xffffffff << 8);
 		float red = ((color_at_point >> 24) & mask)/255.0;
 		float green = ((color_at_point >> 16) & mask)/255.0;

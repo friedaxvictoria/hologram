@@ -20,21 +20,28 @@ out vec3 direction_fs;
 
 void main()
 {  	
+	// get depth and color information and make sure that incorrect geometry will be discarded in the fragment shader
 	float pt_depth = textureLod(depth_tex, texcoord, 0).r;
 	discard_fs = pt_depth < 1 ? 0 : 1;
 	color_fs = textureLod(color_tex, texcoord, 0);
 
+	// calculate eye coordinates of current point
 	vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.s-1, 2*texcoord.t-1, 2*pt_depth-1, 1);
 	pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
+	// direction from source view to the point --> needed to discard rubber-sheets
+	direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
+
+	// calculate intersection of line from target view to current point and the plane at z_far
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 	intersection_z_far.x = intersection_z_far.x - shear;
 
-	direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
-
+	// calculate intersection of line from source view to intersection at z_far with the plane at the current point's depth
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
+	// project the new position back to clip space
 	vec4 new_pos_clip = p_source * intersection_pt_depth;
 
+	// clip the position 
 	gl_Position = vec4(new_pos_clip.x/new_pos_clip.w, 2*texcoord.t-1, 2*pt_depth-1, 1);
 }

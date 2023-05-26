@@ -10,12 +10,12 @@ in VS_OUT {
 layout (triangles, invocations = 4) in;
 layout (triangle_strip, max_vertices = 3) out;
 
-//how far are stereo eyes apart from one another
+// distance between stereo eyes
 uniform float eye_sep;
-//index of the first view position for this geometry shader call
+// index of the first view position for this geometry shader call [-1,1]
 uniform float eye;
-//how far is one eye away from the next --> depends on amount of views
-uniform float eye_offset;
+// how far is one view away from the next --> depends on amount of views
+uniform float view_offset;
 uniform float zero_parallax;
 
 out vec3 normal_eye;
@@ -29,18 +29,22 @@ mat4 get_projection_matrix();
 
 void main()
 {
+	// recalculate projection matrix based on current target view
 	mat4 p = get_projection_matrix();
-	p[2][0] = -eye_sep * (eye + gl_InvocationID * eye_offset);
-	p[3][0] = -zero_parallax * eye_sep * (eye + gl_InvocationID * eye_offset);
+	p[2][0] = -eye_sep * (eye + gl_InvocationID * view_offset);
+	p[3][0] = -zero_parallax * eye_sep * (eye + gl_InvocationID * view_offset);
 
 	for (int i = 0; i<3; i++){
+		// pass through values from vertex shader
 		normal_eye = gs_in[i].normal_eye_gs;
 		position_eye = gs_in[i].position_eye_gs;
 		color_fs = gs_in[i].color_gs;
 		texcoord_fs = gs_in[i].texcoord_gs;
 
+		// calculate clip coordinates for point
 		gl_Position = p * gl_in[i].gl_Position;
 
+		// set layer and viewport index for volume or quilt variant
 		gl_Layer = gl_InvocationID;
 		gl_ViewportIndex = gl_InvocationID;
 

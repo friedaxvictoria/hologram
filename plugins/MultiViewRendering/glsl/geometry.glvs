@@ -1,5 +1,7 @@
 #version 330
 
+// slightly altered version of the textured_surface.glvs
+
 uniform mat4 texture_matrix = mat4(
 	vec4(1.0, 0.0, 0.0, 0.0), 
 	vec4(0.0, 1.0, 0.0, 0.0), 
@@ -28,6 +30,7 @@ out VS_OUT {
 
 void main()
 {
+	// calculate point's eye coordinates and everything that does not change between the different target views
 	gl_Position = get_modelview_matrix()*position;
 	vs_out.position_eye_gs = gl_Position.xyz / gl_Position.w;
 	vs_out.color_gs = color;

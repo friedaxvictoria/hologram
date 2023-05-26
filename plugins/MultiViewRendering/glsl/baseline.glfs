@@ -16,7 +16,7 @@ void main()
 	vec3 normal = normalize(cross(dFdx(pos_source_world.xyz), dFdy(pos_source_world.xyz)));
 	float ortho_to_proj = abs(dot(direction_fs, normal));
 	if (artefacts && (ortho_to_proj < epsilon))
-		discard;
+		discard; // dont't render rubber-sheets
 	if (discard_fs > 0)
 		discard; // don't render "empty" geometry
 	color = color_fs;

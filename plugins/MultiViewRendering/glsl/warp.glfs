@@ -16,7 +16,7 @@ void main()
 	vec3 normal = normalize(cross(dFdx(pos_eye.xyz), dFdy(pos_eye.xyz)));
 	float ortho_to_proj = abs(dot(direction_fs, normal));
 	if (artefacts && (ortho_to_proj < epsilon))
-		discard;
+		discard; // don't render rubber-sheets
 	if (discard_fs > 0)
 		discard; // don't render "empty" geometry
 	color = color_fs;

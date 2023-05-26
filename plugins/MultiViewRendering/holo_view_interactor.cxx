@@ -1507,9 +1507,9 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "eye_sep", (float)eye_distance);
 	compute_shader.set_uniform(ctx, "zero_parallax", (float)get_parallax_zero_depth());
-	compute_shader.set_uniform(ctx, "screen_w", int(view_width));
-	compute_shader.set_uniform(ctx, "screen_h", int(view_height));
-	compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
+	compute_shader.set_uniform(ctx, "screen_w", view_width);
+	compute_shader.set_uniform(ctx, "screen_h", view_height);
+	compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
 	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 	
@@ -1531,9 +1531,9 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
-	resolve_compute_shader.set_uniform(ctx, "screen_h", int(view_height));
-	resolve_compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
+	resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
+	resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
+	resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
 	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 
@@ -1555,8 +1555,8 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 
 	glBindImageTexture(0, (int&)quilt_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
-	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", int(quilt_nr_cols));
+	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
+	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
 	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
 

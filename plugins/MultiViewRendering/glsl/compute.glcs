@@ -19,9 +19,9 @@ uniform float shear;
 uniform float eye_sep;
 uniform float zero_parallax;
 
-uniform int screen_w;
-uniform int screen_h;
-uniform int quilt_cols;
+uniform uint screen_w;
+uniform uint screen_h;
+uniform uint quilt_cols;
 uniform uint nr_holo_views;
 uniform uint nr_render_views;
 
@@ -36,13 +36,15 @@ void main()
 	vec2 texcoord = vec2((global_coord.x%screen_w)/float(screen_w-1), (global_coord.y%screen_h)/float(screen_h-1));
 
 	int x_index = int(global_coord.x/float(screen_w));
-	int current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
+	uint current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
 	vec4 eye_target = vec4(start_x + current_view*x_offset, 0, 0, 1);
 
 	vec4 color;
 	float pt_depth;
 
+	// iterate over all rendered views that are available
 	for (int i = 0; i < nr_render_views; i++){
+		//get color and depth values for the rendered views
 		if (i == 0){
 			color = textureLod(color_tex0, texcoord, 0);
 			pt_depth = textureLod(depth_tex0, texcoord, 0).r;
@@ -55,33 +57,38 @@ void main()
 			color = textureLod(color_tex2, texcoord, 0);
 			pt_depth = textureLod(depth_tex2, texcoord, 0).r;
 		}
-
+		// if point is too far away, set alpha to zero so it's not visible in the end
 		if (pt_depth >= 1.0)
 			color.a = 0;
 
+		// get source view data depending on the for-loop iteration
 		float source_idx = nr_render_views == 1 ? 0.0 : (2.0f * i) / (nr_render_views - 1) - 1.0f;
-
-		vec4 eye_source = vec4(start_x * -source_idx, 0, 0, 1);
-
+		vec4 eye_source = vec4(- start_x * source_idx, 0, 0, 1);
 		mat4 p_source = p_source_zero;
 		p_source[2][0] = -eye_sep * source_idx;
 		p_source[3][0] = -zero_parallax * eye_sep * source_idx;
 
+		// get the current point's position in eye space
 		vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 		vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
+		// calculate the intersection of the line from target view to the current point with the plane at z_far
 		vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 		intersection_z_far.x -=  shear * (eye_target.x - eye_source.x) ;
 
+		// calculate the intersection of the line from source view to the intersection at z_far with the plane at the current point's depth
 		vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 
+		// reproject point to clip coordinates and calculate it's new window coordinates
 		vec4 new_pos_clip = p_source * intersection_pt_depth;
 		float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-		int new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
+		// get the new position in coordinates [0,screen_width) with an offset depending on what view it is
+		uint new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
 		if (x_window == 0)
 			new_pos_x = x_index * screen_w;
 
+		// combine color and depth information for storing it in the storage buffer
 		ivec4 color_bytes = ivec4(color * 255);
 		int depth = floatBitsToInt(pt_depth);
 		int point = (color_bytes.r << 24) | (color_bytes.g << 16) | (color_bytes.b << 8) | color_bytes.a;
@@ -90,8 +97,9 @@ void main()
 		//int64_t depth = floatBitsToInt(pt_depth);
 		//int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 
-		int index = new_pos_x+global_coord.y*screen_w*quilt_cols;
+		uint index = new_pos_x+global_coord.y*screen_w*quilt_cols;
 
+		// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
 		//atomicMin(col_depth[index],point);
 		//if statement can be eliminated once depth is taken into account
 		if (pt_depth < 1.0)

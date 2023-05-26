@@ -14,7 +14,8 @@ in vec4 position;
 
 
 void main()
-{
+{	
+	// transform each point correctly 
 	vec4 transformed = get_modelview_projection_matrix()*position;
 	gl_Position = transformed;
 }
