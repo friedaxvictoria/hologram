@@ -18,7 +18,6 @@
 #include <cgv/gui/mouse_event.h>
 #include <cgv/media/image/image_writer.h>
 #include <cgv/type/variant.h>
-#include <chrono>
 #include <cmath>
 #include <stdio.h>
 
@@ -986,6 +985,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
 
+	glGenQueries(1, &time_query);
 	glGenBuffers(1, &ssbo);
 	glNamedBufferData(ssbo, GLsizeiptr(sizeof(int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols), nullptr,
 					  GL_DYNAMIC_COPY);
@@ -1199,19 +1199,11 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 			current_render_fbo.disable(ctx);
 		}
 	}
-	if (multi_pass_terminate(ctx)) {
-		time_end = std::chrono::high_resolution_clock::now();
-		std::cout << std::fixed << multiview_mpx_mode << " with " << nr_render_views << " source views, took "
-				  << std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_start).count()
-				  << " microseconds." << std::endl;
-	}
 }
 
 void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 {
-	// check if render fbo needs re-initialization (we always change all 3 at the same time, so we just check the
-	// center one)
-	time_start = std::chrono::high_resolution_clock::now();
+	glBeginQuery(GL_TIME_ELAPSED, time_query);
 	auto& fb = render_fbo[1].ref_frame_buffer();
 	if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height)
 	{
@@ -1234,7 +1226,7 @@ void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
 
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 {
-	time_start = std::chrono::high_resolution_clock::now();
+	glBeginQuery(GL_TIME_ELAPSED, time_query);
 	if (holo_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;
@@ -1511,7 +1503,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "screen_h", view_height);
 	compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
+	glDispatchCompute(view_width, view_height, 1);
 	
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -1535,7 +1527,7 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
 	resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
+	glDispatchCompute(view_width, view_height, 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -1558,7 +1550,7 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width * quilt_nr_cols, view_height * quilt_nr_rows, 1);
+	glDispatchCompute(view_width, view_height, 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -1782,6 +1774,17 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			}
 		}
 	}
+
+	glEndQuery(GL_TIME_ELAPSED);
+
+	int done = 0;
+	while (!done) {
+		glGetQueryObjectiv(time_query, GL_QUERY_RESULT_AVAILABLE, &done);
+	}
+	glGetQueryObjectui64v(time_query, GL_QUERY_RESULT, &elapsed_time);
+	
+	std::cout << "Mode: " << multiview_mpx_mode << ", Number source views: " << nr_render_views
+			  << ", FPS: " << 1000000000.0 / elapsed_time << std::endl;
 }
 
 ///
@@ -1883,7 +1886,8 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping, warp from closest, compute, backwards, geometry'");
+							   "enums='single view, basic view, baseline, warping, warp from closest, "
+							   "compute, backwards, geometry'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
@@ -1948,8 +1952,8 @@ void holo_view_interactor::on_set(void* m)
 		// update_member(&nr_render_views); //          force-synchronize those two parameters
 	}
 	else if (m == &multiview_mpx_mode && multiview_mpx_mode == MVM_SINGLE) {
-		holo_mpx_mode = HM_SINGLE;	   // --NOTE-- since no image-warping is implemented yet, we
-		update_member(&holo_mpx_mode); //          force-synchronize those two parameters
+		holo_mpx_mode = HM_SINGLE;	  
+		update_member(&holo_mpx_mode); 
 	}
 	update_member(m);
 	post_redraw();

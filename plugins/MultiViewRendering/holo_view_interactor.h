@@ -14,7 +14,6 @@
 #include <cgv/reflect/reflect_enum.h>
 #include <cgv_gl/gl/gl.h>
 #include <glsu/GL/glsu.h>
-#include <chrono>
 #if defined(_WINDOWS) || defined(WIN32) || defined(WIN64)
 #undef max
 #undef min
@@ -165,13 +164,15 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	mat4 proj_source[3], modelview_source[3];
 	vec4 eye_source[3];
 
-	//reference to mesh_viewer
+	// reference to mesh_viewer
 	mesh_viewer* mesh = nullptr;
 
-	//variables for compute shader
+	// shader storage buffer object for warping with compute shader
 	GLuint ssbo;
 
-	std::chrono::steady_clock::time_point time_start, time_end;
+	// for performance measurements
+	GLuint64 elapsed_time;
+	GLuint time_query;
 
   public:
 	void set_default_values();
