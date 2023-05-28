@@ -1486,10 +1486,6 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	depth_tex2.enable(ctx, 5);
 	compute_shader.set_uniform(ctx, "depth_tex2", 5);
 
-	//65535 available for each dimension for work group (defined in gldispatchcompute)
-	//for work group size (defined in cs) it is (1024, 1024, 64)
-	//max number of work group invocations: 1024
-
 	compute_shader.set_uniform(ctx, "p_source_zero", proj_source[0]);
 	compute_shader.set_uniform(ctx, "start_x", - views_x_extent / 2);
 	compute_shader.set_uniform(ctx, "x_offset", views_x_extent / nr_holo_views);
@@ -1503,7 +1499,9 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "screen_h", view_height);
 	compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width, view_height, 1);
+	glGetProgramiv((unsigned)((size_t)compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE, local_work_group);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / local_work_group[1]), nr_holo_views);
 	
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -1527,7 +1525,9 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
 	resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width, view_height, 1);
+	glGetProgramiv((unsigned)((size_t)resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE, local_work_group);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -1550,7 +1550,10 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glDispatchCompute(view_width, view_height, 1);
+	glGetProgramiv((unsigned)((size_t)quilt_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
+				   local_work_group);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -1783,7 +1786,8 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 	glGetQueryObjectui64v(time_query, GL_QUERY_RESULT, &elapsed_time);
 	
-	std::cout << "Mode: " << multiview_mpx_mode << ", Number source views: " << nr_render_views
+	std::cout << "Render mode: " << multiview_mpx_mode << ", Storage mode: " << holo_mpx_mode
+			  << ", Source views : " << nr_render_views
 			  << ", FPS: " << 1000000000.0 / elapsed_time << std::endl;
 }
 
