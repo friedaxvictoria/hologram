@@ -131,7 +131,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned quilt_nr_cols = 5;
 	unsigned quilt_nr_rows = 9;
 	bool quilt_interpolate = true;
-	bool quilt_write_to_file = false;
+	bool quilt_write_to_file = false, volume_write_to_file = false;
 	float w = 1.0;
 
   protected:

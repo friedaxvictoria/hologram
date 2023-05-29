@@ -1194,6 +1194,11 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 				quilt_write_to_file = false;
 				on_set(&quilt_write_to_file);
 			}
+			else if (volume_write_to_file && multiview_mpx_mode == HM_VOLUME) {
+				volume_holo_tex.write_to_file(ctx, "volume.png", view_index);
+				volume_write_to_file = false;
+				on_set(&volume_write_to_file);
+			}
 			post_process_surface(ctx);
 		}
 		else{
@@ -1287,6 +1292,11 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 		}
 	}
 	else{
+		if (volume_write_to_file) {
+			volume_render_tex.write_to_file(ctx, "volume.png", view_index);
+			volume_write_to_file = false;
+			on_set(&volume_write_to_file);
+		}
 		volume_fbo.pop_viewport(ctx);
 		volume_fbo.disable(ctx);
 	}
@@ -1943,6 +1953,12 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Rows", quilt_nr_rows, "value_slider", "min=0;max=20;ticks=true");
 			add_member_control(this, "Interpolate", quilt_interpolate, "check");
 			add_member_control(this, "Write To File", quilt_write_to_file, "toggle");
+			align("\b");
+			end_tree_node(quilt_bg_color);
+		}
+		if (begin_tree_node("Volume", volume_write_to_file, true)) {
+			align("\a");
+			add_member_control(this, "Write To File", volume_write_to_file, "toggle");
 			align("\b");
 			end_tree_node(quilt_bg_color);
 		}
