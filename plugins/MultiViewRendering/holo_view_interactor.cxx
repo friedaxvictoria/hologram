@@ -183,8 +183,8 @@ void holo_view_interactor::timer_event(double t, double dt)
 
 ///
 holo_view_interactor::holo_view_interactor(const char* name)
-	: node(name), quilt_depth_buffer("[D]"), volume_depth_buffer("[D]"), quilt_warp_depth_buffer("[D]"),
-	  volume_warp_depth_buffer("[D]"), layered_depth_tex("flt32[D]"), layered_color_tex("uint8[R,G,B,A]"),
+	: node(name), quilt_warp_depth_buffer("[D]"),
+	  volume_warp_depth_buffer("[D]"), layered_depth_tex("flt32[D]"), layered_color_tex("flt32[R,G,B,A]"),
 	  volume_holo_tex("flt32[R,G,B,A]"), quilt_holo_tex("flt32[R,G,B,A]"), layered_color_geo_tex("flt32[R,G,B,A]")
 {
 	enable_messages = true;
@@ -981,6 +981,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!warping_geometry_shader.build_program(ctx, "warp_with_geometry.glpr", true))
 		return false;
+	if (!test.build_program(ctx, "test.glpr", true))
+		return false;
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
@@ -1025,7 +1027,7 @@ void holo_view_interactor::init_frame(context& ctx)
 				vi = 0;
 				for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 					for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
-						volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+						volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
 						perform_render_pass(ctx, vi, RP_STEREO);
 						if (++vi == nr_holo_views)
 							break;
@@ -1036,7 +1038,7 @@ void holo_view_interactor::init_frame(context& ctx)
 			}
 			else {
 				for (vi = 0; vi < nr_holo_views; ++vi) {
-					volume_fbo.attach(ctx, volume_render_tex, vi, 0, 0);
+					volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 					glClear(GL_DEPTH_BUFFER_BIT);
 					perform_render_pass(ctx, vi, RP_STEREO);
 				}
@@ -1065,7 +1067,7 @@ void holo_view_interactor::init_frame(context& ctx)
 				vi = 0;
 				while (vi < nr_holo_views) {
 					current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-					volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
+					volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
 					mesh->set_params_for_gemoetry(get_parallax_zero_depth(), eye_distance, current_e, (float)nr_holo_views);
 					perform_render_pass(ctx, vi, RP_STEREO);
 				}
@@ -1086,7 +1088,7 @@ void holo_view_interactor::init_frame(context& ctx)
 
 					for (int i = 0; i < 4; i++){			
 						glCopyImageSubData((unsigned)((size_t)layered_color_tex.handle)-1, GL_TEXTURE_2D_ARRAY, 0, 0, 0, i,
-										   (unsigned)((size_t)volume_render_tex.handle)-1, GL_TEXTURE_3D, 0, 0, 0, vi,
+										   (unsigned)((size_t)volume_holo_tex.handle)-1, GL_TEXTURE_3D, 0, 0, 0, vi,
 										   view_width,view_height,1);
 						if (++vi == nr_holo_views)
 							break;
@@ -1119,7 +1121,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	case MVM_COMPUTE:
 	case MVM_WARP_GEO:
 		if (initiate_render_pass_recursion(ctx)) {
-			enable_warp_fb(ctx);
+			enable_surface(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
 			last_nr_viewport_columns = nr_viewport_columns;
 			last_nr_viewport_rows = nr_viewport_rows;
@@ -1208,64 +1210,42 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 	}
 }
 
-void holo_view_interactor::enable_warp_fb(cgv::render::context& ctx)
-{
-	glBeginQuery(GL_TIME_ELAPSED, time_query);
-	auto& fb = render_fbo[1].ref_frame_buffer();
-	if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height)
-	{
-		render_fbo[0].set_size({(int)view_width,(int)view_height});
-		render_fbo[0].ensure(ctx);
-
-		const auto res = render_fbo[0].get_size();
-		render_fbo[1].set_size(res);
-		render_fbo[1].ensure(ctx);
-		render_fbo[2].set_size(res);
-		render_fbo[2].ensure(ctx);
-
-		const float half_aspect = (float)res.x() / (2 * res.y());
-		heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f}, res.x(),
-									  res.y(), tessellator::VA_TEXCOORD);
-		heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
-										   res.x(), res.y(), tessellator::VA_TEXCOORD);
-		heightmap_warp_geometry = tessellator::quad(ctx, warping_geometry_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
-										   res.x(), res.y(), tessellator::VA_TEXCOORD);
-	}
-}
-
 void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 {
 	glBeginQuery(GL_TIME_ELAPSED, time_query);
 	if (holo_mpx_mode == HM_QUILT) {
 		if (!quilt_use_offline_texture)
 			return;
-		if (!quilt_fbo.is_created() || quilt_fbo.get_width() != quilt_width || quilt_fbo.get_height() != quilt_height) {
-			quilt_fbo.destruct(ctx);
-			quilt_render_tex.destruct(ctx);
-			quilt_depth_buffer.destruct(ctx);
-			quilt_render_tex.create(ctx, TT_2D, quilt_width, quilt_height);
-			quilt_depth_buffer.create(ctx, quilt_width, quilt_height);
-			quilt_fbo.create(ctx, quilt_width, quilt_height);
-			quilt_fbo.attach(ctx, quilt_render_tex, 0);
-			quilt_fbo.attach(ctx, quilt_depth_buffer);
+		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
+			quilt_warp_fbo.get_height() != quilt_height)
+		{
+			quilt_holo_tex.destruct(ctx);
+			quilt_warp_fbo.destruct(ctx);
+			quilt_warp_depth_buffer.destruct(ctx);
+			quilt_warp_fbo.create(ctx, quilt_width, quilt_height);
+			quilt_warp_depth_buffer.create(ctx, quilt_width, quilt_height);
+			quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
+			quilt_warp_fbo.attach(ctx, quilt_holo_tex);
+			quilt_warp_fbo.attach(ctx, quilt_warp_depth_buffer);
 		}
-		quilt_fbo.enable(ctx, 0);
-		quilt_fbo.push_viewport(ctx);
+		quilt_warp_fbo.enable(ctx);
+		quilt_warp_fbo.push_viewport(ctx);
 	}
 	else {
-		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
-			volume_fbo.get_height() != view_height || volume_render_tex.get_depth() != nr_holo_views){
-			volume_fbo.destruct(ctx);
-			volume_render_tex.destruct(ctx);
-			volume_depth_buffer.destruct(ctx);
-			volume_render_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
-			volume_depth_buffer.create(ctx, view_width, view_height);
-			volume_fbo.create(ctx, view_width, view_height);
-			volume_fbo.attach(ctx, volume_render_tex, 0, 0, 0);
-			volume_fbo.attach(ctx, volume_depth_buffer);
+		if (!volume_warp_fbo.is_created() || volume_warp_fbo.get_width() != view_width ||
+			volume_warp_fbo.get_height() != view_height)
+		{
+			volume_warp_fbo.destruct(ctx);
+			volume_holo_tex.destruct(ctx);
+			volume_warp_depth_buffer.destruct(ctx);
+			volume_warp_fbo.create(ctx, view_width, view_height);
+			volume_warp_depth_buffer.create(ctx, view_width, view_height);
+			volume_holo_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
+			volume_warp_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
+			volume_warp_fbo.attach(ctx, volume_warp_depth_buffer);
 		}
-		volume_fbo.enable(ctx, 0);
-		volume_fbo.push_viewport(ctx);
+		volume_warp_fbo.enable(ctx);
+		volume_warp_fbo.push_viewport(ctx);
 		if ((!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
 			layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4) &&
 			multiview_mpx_mode == MVM_GEOMETRY)
@@ -1278,27 +1258,52 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			layered_fbo.create(ctx, view_width, view_height);
 		}
 	}
+	if (multiview_mpx_mode == MVM_BASELINE || multiview_mpx_mode == MVM_WARPING ||
+		multiview_mpx_mode == MVM_WARPING_CLOSEST || multiview_mpx_mode == MVM_COMPUTE ||
+		multiview_mpx_mode == MVM_WARP_GEO)
+	{
+		auto& fb = render_fbo[1].ref_frame_buffer();
+		if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height) {
+			render_fbo[0].set_size({(int)view_width, (int)view_height});
+			render_fbo[0].ensure(ctx);
+
+			const auto res = render_fbo[0].get_size();
+			render_fbo[1].set_size(res);
+			render_fbo[1].ensure(ctx);
+			render_fbo[2].set_size(res);
+			render_fbo[2].ensure(ctx);
+
+			const float half_aspect = (float)res.x() / (2 * res.y());
+			heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+										  res.x(), res.y(), tessellator::VA_TEXCOORD);
+			heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+											   res.x(), res.y(), tessellator::VA_TEXCOORD);
+			heightmap_warp_geometry =
+				  tessellator::quad(ctx, warping_geometry_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+									res.x(), res.y(), tessellator::VA_TEXCOORD);
+		}
+	}
 }
 
 void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 {
 	if (holo_mpx_mode == HM_QUILT) {
-		quilt_fbo.pop_viewport(ctx);
-		quilt_fbo.disable(ctx);
+		quilt_warp_fbo.pop_viewport(ctx);
+		quilt_warp_fbo.disable(ctx);
 		if (quilt_write_to_file) {
-			quilt_render_tex.write_to_file(ctx, "quilt.png");
+			quilt_holo_tex.write_to_file(ctx, "quilt.png");
 			quilt_write_to_file = false;
 			on_set(&quilt_write_to_file);
 		}
 	}
 	else{
 		if (volume_write_to_file) {
-			volume_render_tex.write_to_file(ctx, "volume.png", view_index);
+			volume_holo_tex.write_to_file(ctx, "volume.png", view_index);
 			volume_write_to_file = false;
 			on_set(&volume_write_to_file);
 		}
-		volume_fbo.pop_viewport(ctx);
-		volume_fbo.disable(ctx);
+		volume_warp_fbo.pop_viewport(ctx);
+		volume_warp_fbo.disable(ctx);
 	}
 	glViewport(0, 0, ctx.get_width(), ctx.get_height());
 }
@@ -1419,9 +1424,9 @@ void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
 	{
 		layered_fbo.destruct(ctx);
 		layered_depth_tex.destruct(ctx);
-		layered_color_geo_tex.destruct(ctx);
+		layered_color_tex.destruct(ctx);
 		layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
-		layered_color_geo_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
+		layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
 		layered_fbo.create(ctx, view_width, view_height);
 	}
 
@@ -1434,12 +1439,14 @@ void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
 			texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 					&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
 
+			warping_geometry_shader.enable(ctx);
+
 			glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
 			glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, (unsigned)((size_t)layered_depth_tex.handle) - 1,
 								 0);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-								 (unsigned)((size_t)layered_color_geo_tex.handle) - 1, 0);
+								 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			color_tex.enable(ctx, 0);
@@ -1456,15 +1463,13 @@ void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
 			warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target[0]);
 			warping_geometry_shader.set_uniform(ctx, "x_offset", (float)views_x_extent / nr_holo_views);
 
-			warping_geometry_shader.enable(ctx);
 			glDisable(GL_CULL_FACE);
 			heightmap_warp_geometry.draw(ctx);
 			glEnable(GL_CULL_FACE);
-			warping_geometry_shader.disable(ctx);
 			color_tex.disable(ctx);
 			depth_tex.disable(ctx);
 
-			 for (int j = 0; j < 4; j++)
+			 /* for (int j = 0; j < 4; j++)
 			{
 				glCopyImageSubData((unsigned)((size_t)layered_color_geo_tex.handle) - 1, GL_TEXTURE_2D_ARRAY, 0, 0, 0,
 								   j, (unsigned)((size_t)volume_holo_tex.handle) - 1, GL_TEXTURE_3D, 0, 0, 0, vi,
@@ -1473,9 +1478,13 @@ void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
 					break;
 			}
 			if (vi == nr_holo_views)
-				break;
+				break;*/
+
+			vi += 4;
 
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			warping_geometry_shader.disable(ctx);
 		}
 	}	
 }
@@ -1595,21 +1604,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 	double aspect = (double)view_width / view_height;
 
 	if (holo_mpx_mode == HM_QUILT) {
-		if (!quilt_warp_fbo.is_created() || quilt_warp_fbo.get_width() != quilt_width ||
-			quilt_warp_fbo.get_height() != quilt_height)
-		{
-			quilt_holo_tex.destruct(ctx);
-			quilt_warp_fbo.destruct(ctx);
-			quilt_warp_depth_buffer.destruct(ctx);
-			quilt_warp_fbo.create(ctx, quilt_width, quilt_height);
-			quilt_warp_depth_buffer.create(ctx, quilt_width, quilt_height);
-			quilt_holo_tex.create(ctx, TT_2D, quilt_width, quilt_height);
-			quilt_warp_fbo.attach(ctx, quilt_holo_tex);
-			quilt_warp_fbo.attach(ctx, quilt_warp_depth_buffer);
-		}
-
-		quilt_warp_fbo.enable(ctx);
-		quilt_warp_fbo.push_viewport(ctx);
 
 		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1661,21 +1655,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		quilt_warp_fbo.disable(ctx);
 	}
 	else {
-		if (!volume_warp_fbo.is_created() || volume_warp_fbo.get_width() != view_width ||
-			volume_warp_fbo.get_height() != view_height)
-		{
-			volume_warp_fbo.destruct(ctx);
-			volume_holo_tex.destruct(ctx);
-			volume_warp_depth_buffer.destruct(ctx);
-			volume_warp_fbo.create(ctx, view_width, view_height);
-			volume_warp_depth_buffer.create(ctx, view_width, view_height);
-			volume_holo_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
-			volume_warp_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
-			volume_warp_fbo.attach(ctx, volume_warp_depth_buffer);
-		}
-
-		volume_warp_fbo.enable(ctx);
-		volume_warp_fbo.push_viewport(ctx);
 
 		for (vi = 0; vi < nr_holo_views; ++vi) {
 			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
@@ -1741,17 +1720,11 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			prog.set_uniform(ctx, "quilt_width", quilt_width);
 			prog.set_uniform(ctx, "quilt_height", quilt_height);
 			prog.set_uniform(ctx, "quilt_interpolate", quilt_interpolate);
-			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
-				quilt_render_tex.enable(ctx, 0);
-			else
-				quilt_holo_tex.enable(ctx, 0);
+			quilt_holo_tex.enable(ctx, 0);
 			prog.set_uniform(ctx, "quilt_tex", 0);
 		}
 		else {
-			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
-				volume_render_tex.enable(ctx, 0);
-			else
-				volume_holo_tex.enable(ctx, 0);
+			volume_holo_tex.enable(ctx, 0);
 			prog.set_uniform(ctx, "volume_tex", 0);
 		}
 		prog.set_uniform(ctx, "width", display_calib.width);
@@ -1784,21 +1757,30 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 
 	else {
-		if (holo_mpx_mode == HM_QUILT) {
-			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY)
-				quilt_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
-			else
-				quilt_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
+		/* if (multiview_mpx_mode == MVM_WARP_GEO)
+		{
+			volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
+
+			layered_color_tex.enable(ctx, 0);
+			test.set_uniform(ctx, "color_tex", 0);
+			layered_depth_tex.enable(ctx, 1);
+			test.set_uniform(ctx, "depth_tex", 1);
+
+			test.enable(ctx);
+			test.set_uniform(ctx, "depth_value", 1.0f);
+			glEnable(GL_DEPTH_TEST);
+			glDepthFunc(GL_LEQUAL);
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+			glDepthFunc(GL_LESS);
+			test.disable(ctx);
+		}*/
+		if (holo_mpx_mode == HM_QUILT)
+		{
+			quilt_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
 		else {
-			if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
-				volume_fbo.attach(ctx, volume_render_tex, view_index, 0, 0);
-				volume_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
-			}
-			else {
-				volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
-				volume_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
-			}
+			volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
+			volume_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);
 		}
 	}
 

@@ -2,7 +2,7 @@
 
 in VS_OUT {
      float pt_depth;
-	 float discard_fs;
+	 float discard_gs;
 	 vec4 color_gs;
 	 vec2 texcoord_gs;
 } gs_in[]; 
@@ -31,8 +31,8 @@ void main()
 	vec4 eye_target = vec4(current_target_eye + gl_InvocationID*x_offset, 0, 0, 1);
 
 	for (int i = 0; i<3; i++){
-		color_fs = vec4(1,0,0,1);
-		discard_fs = gs_in[i].discard_fs;
+		color_fs =  gs_in[i].color_gs;
+		discard_fs = gs_in[i].discard_gs;
 		// calculate eye coordinates of current point
 		vec4 pt_eye_coord = inverse(p_source) * vec4(2*gs_in[i].texcoord_gs.s-1, 2*gs_in[i].texcoord_gs.t-1, 2*gs_in[i].pt_depth-1, 1);
 		pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
@@ -51,7 +51,6 @@ void main()
 		vec4 new_pos_clip = p_source * intersection_pt_depth;
 
 		gl_Position = vec4(new_pos_clip.x/new_pos_clip.w, 2*gs_in[i].texcoord_gs.t-1, 2*gs_in[i].pt_depth-1, 1);
-		gl_Position = gl_in[i].gl_Position;
 
 		// set layer and viewport index for volume or quilt variant
 		gl_Layer = gl_InvocationID;

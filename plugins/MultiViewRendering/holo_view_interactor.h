@@ -140,18 +140,11 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	float epsilon = 0.02;
 	bool show_holes = true, dis_artefacts = false; 
 
-	cgv::render::frame_buffer quilt_fbo;
-	cgv::render::texture quilt_holo_tex, quilt_render_tex;
-	cgv::render::shader_program quilt_prog;
-	cgv::render::render_buffer quilt_depth_buffer;
-
-	cgv::render::frame_buffer volume_fbo;
-	cgv::render::texture volume_holo_tex, volume_render_tex;
-	cgv::render::shader_program volume_prog;
-	cgv::render::render_buffer volume_depth_buffer;
+	cgv::render::shader_program quilt_prog, volume_prog;
+	cgv::render::texture volume_holo_tex, quilt_holo_tex;
 
 	cgv::render::shader_program baseline_shader, warping_shader, compute_shader,
-		  resolve_compute_shader, quilt_resolve_compute_shader, warping_geometry_shader;
+		  resolve_compute_shader, quilt_resolve_compute_shader, warping_geometry_shader, test;
 	GPUgeometry heightmap, heightmap_warp, heightmap_warp_geometry;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
@@ -249,7 +242,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
-	void enable_warp_fb(cgv::render::context& ctx);
 
   public:
 	///

@@ -1,0 +1,14 @@
+#version 420
+
+layout (binding = 0) uniform sampler2DArray color_tex;
+layout (binding = 1) uniform sampler2DArray depth_tex;
+
+in vec2 texcoord_fs;
+
+out layout(location = 0) vec4 frag_color;
+
+void main()
+{
+	frag_color = texture(color_tex, vec3(texcoord_fs,0));
+	gl_FragDepth = texture(depth_tex, vec3(texcoord_fs,0)).r;
+}
