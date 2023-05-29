@@ -1,0 +1,63 @@
+#version 460 core
+
+in VS_OUT {
+     float pt_depth;
+	 float discard_fs;
+	 vec4 color_gs;
+	 vec2 texcoord_gs;
+} gs_in[]; 
+
+layout (triangles, invocations = 1) in;
+layout (triangle_strip, max_vertices = 3) out;
+
+// distance between stereo eyes
+uniform float current_target_eye;
+uniform float x_offset;
+
+uniform mat4 p_source;
+
+uniform vec4 eye_source;
+
+uniform float z_far;
+uniform float shear;
+
+out float discard_fs;
+out vec4 color_fs;
+out vec4 pos_eye;
+out vec3 direction_fs;
+
+void main()
+{
+	vec4 eye_target = vec4(current_target_eye + gl_InvocationID*x_offset, 0, 0, 1);
+
+	for (int i = 0; i<3; i++){
+		color_fs = vec4(1,0,0,1);
+		discard_fs = gs_in[i].discard_fs;
+		// calculate eye coordinates of current point
+		vec4 pt_eye_coord = inverse(p_source) * vec4(2*gs_in[i].texcoord_gs.s-1, 2*gs_in[i].texcoord_gs.t-1, 2*gs_in[i].pt_depth-1, 1);
+		pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
+
+		// direction from source view to the point --> needed to discard rubber-sheets
+		direction_fs = normalize(eye_source.xyz - pos_eye.xyz);
+
+		// calculate intersection of line from target view to current point and the plane at z_far
+		vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
+		intersection_z_far.x -=  shear * (eye_target.x - eye_source.x);
+
+		// calculate intersection of line from source view to intersection at z_far with the plane at the current point's depth
+		vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
+
+		// project the new position back to clip space
+		vec4 new_pos_clip = p_source * intersection_pt_depth;
+
+		gl_Position = vec4(new_pos_clip.x/new_pos_clip.w, 2*gs_in[i].texcoord_gs.t-1, 2*gs_in[i].pt_depth-1, 1);
+		gl_Position = gl_in[i].gl_Position;
+
+		// set layer and viewport index for volume or quilt variant
+		gl_Layer = gl_InvocationID;
+		gl_ViewportIndex = gl_InvocationID;
+
+		EmitVertex();
+	}
+	EndPrimitive(); 
+}

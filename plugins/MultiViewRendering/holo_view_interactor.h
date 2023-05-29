@@ -105,7 +105,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE, MVM_BACKWARDS, MVM_GEOMETRY};
+	enum MultiViewMode {MVM_SINGLE, MVM_BASIC, MVM_BASELINE, MVM_WARPING, MVM_WARPING_CLOSEST, MVM_COMPUTE, MVM_GEOMETRY, MVM_WARP_GEO};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -150,15 +150,15 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program volume_prog;
 	cgv::render::render_buffer volume_depth_buffer;
 
-	cgv::render::shader_program baseline_shader, warping_shader, compute_shader, backwards_shader,
-		  resolve_compute_shader, quilt_resolve_compute_shader;
-	GPUgeometry heightmap, heightmap_warp;
+	cgv::render::shader_program baseline_shader, warping_shader, compute_shader,
+		  resolve_compute_shader, quilt_resolve_compute_shader, warping_geometry_shader;
+	GPUgeometry heightmap, heightmap_warp, heightmap_warp_geometry;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
-	cgv::render::texture layered_depth_tex, layered_color_tex;
+	cgv::render::texture layered_depth_tex, layered_color_tex, layered_color_geo_tex;
 	cgv::render::frame_buffer layered_fbo;
 
 	mat4 proj_source[3], modelview_source[3];
@@ -174,6 +174,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// for performance measurements
 	GLuint64 elapsed_time;
 	GLuint time_query;
+	float accumulated_time=0;
+	int count=0;
 
   public:
 	void set_default_values();
@@ -239,11 +241,11 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void enable_surface(cgv::render::context& ctx);
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
-	void draw_backwards(cgv::render::context& ctx);
 	void draw_baseline(cgv::render::context& ctx);
 	void draw_image_warp(cgv::render::context& ctx);
 	void draw_image_warp_closest(cgv::render::context& ctx);
 	void warp_compute_shader(cgv::render::context& ctx);
+	void draw_image_warp_geometry(cgv::render::context& ctx);
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
