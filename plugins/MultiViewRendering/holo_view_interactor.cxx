@@ -1987,6 +1987,15 @@ void holo_view_interactor::on_set(void* m)
 		holo_mpx_mode = HM_SINGLE;	  
 		update_member(&holo_mpx_mode); 
 	}
+	else if ((m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols) &&
+			 multiview_mpx_mode == MVM_COMPUTE)
+	{
+		glDeleteBuffers(1, &ssbo);
+		glGenBuffers(1, &ssbo);
+		glNamedBufferData(
+			  ssbo, GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+			  nullptr, GL_DYNAMIC_COPY);
+	}
 	update_member(m);
 	post_redraw();
 }
