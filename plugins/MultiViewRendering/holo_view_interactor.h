@@ -151,7 +151,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
 	cgv::render::render_buffer quilt_warp_depth_buffer, volume_warp_depth_buffer;
 
-	cgv::render::texture layered_depth_tex, layered_color_tex, layered_color_geo_tex;
+	cgv::render::texture layered_depth_tex, layered_color_tex;
 	cgv::render::frame_buffer layered_fbo;
 
 	mat4 proj_source[3], modelview_source[3];

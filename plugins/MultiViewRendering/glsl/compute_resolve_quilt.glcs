@@ -2,7 +2,7 @@
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
-layout(binding = 0, rgba32f) uniform writeonly image2D color_tex;
+layout(binding = 0) uniform writeonly image2D color_tex;
 
 uniform uint screen_w;
 uniform uint quilt_cols;

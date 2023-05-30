@@ -111,7 +111,6 @@ void main()
 			atomicMin(col_depth[index],point);
 		}
 		#else
-			uint depth = floatBitsToInt(pt_depth);
 			int point = (color_bytes.r << 24) | (color_bytes.g << 16) | (color_bytes.b << 8) | color_bytes.a;
 			if(pt_depth < 1.0)
 				atomicExchange(col_depth[index],point);

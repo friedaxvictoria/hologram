@@ -1,21 +1,13 @@
 #version 330
-uniform sampler2D color_tex;
-uniform sampler2D depth_tex;
 
 in vec2 texcoord;
 
 out VS_OUT {
-     float pt_depth;
-	 float discard_gs;
-	 vec4 color_gs;
 	 vec2 texcoord_gs;
 } vs_out;
 
 void main()
 {
-	vs_out.pt_depth = textureLod(depth_tex, texcoord, 0).r;
-	vs_out.discard_gs = vs_out.pt_depth < 1 ? 0 : 1;
-	vs_out.color_gs = textureLod(color_tex, texcoord, 0);
 	vs_out.texcoord_gs = texcoord;
 
 	gl_Position = vec4(texcoord,0,1);

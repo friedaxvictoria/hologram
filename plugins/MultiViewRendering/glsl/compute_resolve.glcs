@@ -2,7 +2,7 @@
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
-layout(binding = 0, rgba32f) uniform writeonly image3D color_tex;
+layout(binding = 0) uniform writeonly image3D color_tex;
 
 uniform uint screen_w;
 uniform uint screen_h;
@@ -19,7 +19,7 @@ void main()
 
 	// get current color
 	uint index = coord.x+coord.y*screen_w*quilt_cols;
-	int color_at_point = col_depth[index];
+	uint color_at_point = col_depth[index];
 
 	// which view (z-value for 3D texture) is being calculated
 	uint current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
@@ -47,7 +47,7 @@ void main()
 		float alpha = ((color_int_left & mask) + (color_int_right) & mask)/500.0;
 
 		if (alpha != 0)
-			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red,green,blue,1));
+			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
 	}
 	else{
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
@@ -56,6 +56,6 @@ void main()
 		float green = ((color_at_point >> 16) & mask)/255.0;
 		float blue = ((color_at_point >> 8) & mask)/255.0;
 		
-		imageStore(color_tex, ivec3(image_coord,current_view), vec4(red,green,blue,1));
+		imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
 	}
 }

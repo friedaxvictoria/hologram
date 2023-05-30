@@ -185,7 +185,7 @@ void holo_view_interactor::timer_event(double t, double dt)
 holo_view_interactor::holo_view_interactor(const char* name)
 	: node(name), quilt_warp_depth_buffer("[D]"),
 	  volume_warp_depth_buffer("[D]"), layered_depth_tex("flt32[D]"), layered_color_tex("flt32[R,G,B,A]"),
-	  volume_holo_tex("flt32[R,G,B,A]"), quilt_holo_tex("flt32[R,G,B,A]"), layered_color_geo_tex("flt32[R,G,B,A]")
+	  volume_holo_tex("flt32[R,G,B,A]"), quilt_holo_tex("flt32[R,G,B,A]")
 {
 	enable_messages = true;
 	use_gamepad = true;
@@ -961,7 +961,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		render_fbo[i].add_attachment(
 			  "depth", "[D]",
 			  cgv::render::TextureFilter::TF_NEAREST,  cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
-		render_fbo[i].add_attachment("color", "flt32[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
+		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
 									 cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
 	}
 
@@ -1144,7 +1144,6 @@ void holo_view_interactor::init_frame(context& ctx)
 		break;
 	}
 
-
 	double aspect = (double)view_width / view_height;
 
 	// compute the clipping planes based on the eye and scene extent
@@ -1191,16 +1190,7 @@ void holo_view_interactor::after_finish(cgv::render::context& ctx)
 		if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
 			// turn our up to 3 views into a quilt or hologram
 			compute_holo_views(ctx);
-			if (quilt_write_to_file && holo_mpx_mode==HM_QUILT) {
-				quilt_holo_tex.write_to_file(ctx, "quilt.png");
-				quilt_write_to_file = false;
-				on_set(&quilt_write_to_file);
-			}
-			else if (volume_write_to_file && multiview_mpx_mode == HM_VOLUME) {
-				volume_holo_tex.write_to_file(ctx, "volume.png", view_index);
-				volume_write_to_file = false;
-				on_set(&volume_write_to_file);
-			}
+			disable_surface(ctx);
 			post_process_surface(ctx);
 		}
 		else{
@@ -1248,7 +1238,7 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		volume_warp_fbo.push_viewport(ctx);
 		if ((!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
 			layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4) &&
-			multiview_mpx_mode == MVM_GEOMETRY)
+			(multiview_mpx_mode == MVM_GEOMETRY || multiview_mpx_mode == MVM_WARP_GEO))
 		{
 			layered_fbo.destruct(ctx);
 			layered_depth_tex.destruct(ctx);
@@ -1311,6 +1301,11 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 // Iterate once over all rendered views to generate one holo view with the baseline approach
 void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 {
+	baseline_shader.enable(ctx);
+	glDisable(GL_CULL_FACE);
+	baseline_shader.set_uniform(ctx, "epsilon", epsilon);
+	baseline_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
 				&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
@@ -1319,19 +1314,14 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 		baseline_shader.set_uniform(ctx, "color", 0);
 		depth_tex.enable(ctx, 1);
 		baseline_shader.set_uniform(ctx, "depth", 1);
-
 		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(proj_source[i] * modelview_source[i]));
-		baseline_shader.set_uniform(ctx, "epsilon", epsilon);
-		baseline_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
-		baseline_shader.enable(ctx);
-		glDisable(GL_CULL_FACE);
 		heightmap.draw(ctx);
-		glEnable(GL_CULL_FACE);
-		baseline_shader.disable(ctx);
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
+	glEnable(GL_CULL_FACE);
+	baseline_shader.disable(ctx);
 }
 
 // Generate one holo view with the image warping approach by warping the closest of the rendered views
@@ -1359,7 +1349,6 @@ void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 	warping_shader.set_uniform(ctx, "color_tex", 0);
 	depth_tex.enable(ctx, 1);
 	warping_shader.set_uniform(ctx, "depth_tex", 1);
-
 	warping_shader.set_uniform(ctx, "p_source", proj_source[source_idx]);
 	warping_shader.set_uniform(ctx, "eye_source", eye_source[source_idx]);
 	warping_shader.set_uniform(ctx, "eye_target", eye_target);
@@ -1381,8 +1370,14 @@ void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 {
 	double aspect = (double)view_width / view_height;
-
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+
+	warping_shader.enable(ctx);
+	glDisable(GL_CULL_FACE);
+	warping_shader.set_uniform(ctx, "eye_target", eye_target);
+	warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	warping_shader.set_uniform(ctx, "epsilon", epsilon);
+	warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
@@ -1394,23 +1389,16 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		warping_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
 		warping_shader.set_uniform(ctx, "depth_tex", 1);
-
 		warping_shader.set_uniform(ctx, "p_source", proj_source[i]);
 		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
-		warping_shader.set_uniform(ctx, "eye_target", eye_target);
-		warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 		warping_shader.set_uniform(ctx, "shear", shear);
-		warping_shader.set_uniform(ctx, "epsilon", epsilon);
-		warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
-		warping_shader.enable(ctx);
-		glDisable(GL_CULL_FACE);
 		heightmap_warp.draw(ctx);
-		glEnable(GL_CULL_FACE);
-		warping_shader.disable(ctx);
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
+	glEnable(GL_CULL_FACE);
+	warping_shader.disable(ctx);
 }
 
 void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
@@ -1419,74 +1407,115 @@ void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
 	float views_x_extent = eye_distance * y_extent_at_focus * aspect;
 	float shear = (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
-	if ((!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
-		 layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4))
-	{
-		layered_fbo.destruct(ctx);
-		layered_depth_tex.destruct(ctx);
-		layered_color_tex.destruct(ctx);
-		layered_depth_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
-		layered_color_tex.create(ctx, TT_2D_ARRAY, view_width, view_height, 4);
-		layered_fbo.create(ctx, view_width, view_height);
-	}
+	texture &color_tex0 = *render_fbo[0].attachment_texture_ptr("color"),
+			&depth_tex0 = *render_fbo[0].attachment_texture_ptr("depth"),
+			&color_tex1 = *render_fbo[1].attachment_texture_ptr("color"),
+			&depth_tex1 = *render_fbo[1].attachment_texture_ptr("depth"),
+			&color_tex2 = *render_fbo[2].attachment_texture_ptr("color"),
+			&depth_tex2 = *render_fbo[2].attachment_texture_ptr("depth");
 
-	for (unsigned int i = 0; i < nr_render_views; i++) {
+	warping_geometry_shader.enable(ctx);
+	glDisable(GL_CULL_FACE);
+
+	warping_geometry_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	warping_geometry_shader.set_uniform(ctx, "shear", shear);
+	warping_geometry_shader.set_uniform(ctx, "epsilon", epsilon);
+	warping_geometry_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+	warping_geometry_shader.set_uniform(ctx, "x_offset", (float)views_x_extent / nr_holo_views);
+	warping_geometry_shader.set_uniform(ctx, "nr_render_views", nr_render_views);
+	warping_geometry_shader.set_uniform(ctx, "p_source_zero", proj_source[0]);
+	warping_geometry_shader.set_uniform(ctx, "eye_sep", (float)eye_distance);
+	warping_geometry_shader.set_uniform(ctx, "zero_parallax", (float)get_parallax_zero_depth());
+	warping_geometry_shader.set_uniform(ctx, "start_x", -views_x_extent / 2);
+
+	color_tex0.enable(ctx, 0);
+	warping_geometry_shader.set_uniform(ctx, "color_tex0", 0);
+	depth_tex0.enable(ctx, 1);
+	warping_geometry_shader.set_uniform(ctx, "depth_tex0", 1);
+	color_tex1.enable(ctx, 2);
+	warping_geometry_shader.set_uniform(ctx, "color_tex1", 2);
+	depth_tex1.enable(ctx, 3);
+	warping_geometry_shader.set_uniform(ctx, "depth_tex1", 3);
+	color_tex2.enable(ctx, 4);
+	warping_geometry_shader.set_uniform(ctx, "color_tex2", 4);
+	depth_tex2.enable(ctx, 5);
+	warping_geometry_shader.set_uniform(ctx, "depth_tex2", 5);
+
+	if (holo_mpx_mode == HM_QUILT) {
 		vi = 0;
 		while (vi < nr_holo_views) {
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-			vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
+			volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
+			float eye_target = 0.5f * current_e * eye_distance * y_extent_at_focus * aspect;
 
-			texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
-					&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
-
-			warping_geometry_shader.enable(ctx);
-
-			glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
-			glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, (unsigned)((size_t)layered_depth_tex.handle) - 1,
-								 0);
-			glClear(GL_COLOR_BUFFER_BIT);
-			glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-								 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			color_tex.enable(ctx, 0);
-			warping_geometry_shader.set_uniform(ctx, "color_tex", 0);
-			depth_tex.enable(ctx, 1);
-			warping_geometry_shader.set_uniform(ctx, "depth_tex", 1);
-
-			warping_geometry_shader.set_uniform(ctx, "p_source", proj_source[i]);
-			warping_geometry_shader.set_uniform(ctx, "eye_source", eye_source[i]);
-			warping_geometry_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
-			warping_geometry_shader.set_uniform(ctx, "shear", shear);
-			warping_geometry_shader.set_uniform(ctx, "epsilon", epsilon);
-			warping_geometry_shader.set_uniform(ctx, "artefacts", dis_artefacts);
-			warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target[0]);
-			warping_geometry_shader.set_uniform(ctx, "x_offset", (float)views_x_extent / nr_holo_views);
-
-			glDisable(GL_CULL_FACE);
-			heightmap_warp_geometry.draw(ctx);
-			glEnable(GL_CULL_FACE);
-			color_tex.disable(ctx);
-			depth_tex.disable(ctx);
-
-			 /* for (int j = 0; j < 4; j++)
-			{
-				glCopyImageSubData((unsigned)((size_t)layered_color_geo_tex.handle) - 1, GL_TEXTURE_2D_ARRAY, 0, 0, 0,
-								   j, (unsigned)((size_t)volume_holo_tex.handle) - 1, GL_TEXTURE_3D, 0, 0, 0, vi,
-								   view_width, view_height, 1);
-				if (++vi == nr_holo_views)
-					break;
+			glEnable(GL_SCISSOR_TEST);
+			for (GLuint i = 0; i < 4; i++) {
+				quilt_row = vi / quilt_nr_cols;
+				quilt_col = vi % quilt_nr_cols;
+				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
+				glViewportIndexedf(i, vp[0], vp[1], vp[2], vp[3]);
+				glScissorIndexed(i, vp[0], vp[1], vp[2], vp[3]);
+				vi++;
 			}
-			if (vi == nr_holo_views)
-				break;*/
 
-			vi += 4;
+			warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			heightmap_warp_geometry.draw(ctx);
+		}
+	}
+	else {
+		for (unsigned int i = 0; i < nr_render_views; i++) {
+			vi = 0;
+			while (vi < nr_holo_views) {
+				current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
+				float eye_target = 0.5f * current_e * eye_distance * y_extent_at_focus * aspect;
 
-			warping_geometry_shader.disable(ctx);
+				texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
+						&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
+
+				glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
+				glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+									 (unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
+				glClear(GL_COLOR_BUFFER_BIT);
+				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+									 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
+				glClear(GL_COLOR_BUFFER_BIT);
+
+				color_tex.enable(ctx, 0);
+				warping_geometry_shader.set_uniform(ctx, "color_tex", 0);
+				depth_tex.enable(ctx, 1);
+				warping_geometry_shader.set_uniform(ctx, "depth_tex", 1);
+				warping_geometry_shader.set_uniform(ctx, "p_source", proj_source[i]);
+				warping_geometry_shader.set_uniform(ctx, "eye_source", eye_source[i]);
+				warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target);
+
+				heightmap_warp_geometry.draw(ctx);
+				color_tex.disable(ctx);
+				depth_tex.disable(ctx);
+
+				/* for (int j = 0; j < 4; j++)
+			   {
+				   glCopyImageSubData((unsigned)((size_t)layered_color_geo_tex.handle) - 1, GL_TEXTURE_2D_ARRAY, 0, 0,
+			   0, j, (unsigned)((size_t)volume_holo_tex.handle) - 1, GL_TEXTURE_3D, 0, 0, 0, vi, view_width,
+			   view_height, 1); if (++vi == nr_holo_views) break;
+			   }
+			   if (vi == nr_holo_views)
+				   break;*/
+
+				vi += 4;
+
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			}
 		}
 	}	
+	color_tex0.disable(ctx);
+	depth_tex0.disable(ctx);
+	color_tex1.disable(ctx);
+	depth_tex1.disable(ctx);
+	color_tex2.disable(ctx);
+	depth_tex2.disable(ctx);
+	glEnable(GL_CULL_FACE);
+	warping_geometry_shader.disable(ctx);
 }
 
 void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
@@ -1604,7 +1633,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 	double aspect = (double)view_width / view_height;
 
 	if (holo_mpx_mode == HM_QUILT) {
-
 		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1651,12 +1679,12 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			warp_compute_shader(ctx);
 			quilt_resolve_pass_compute_shader(ctx);
 		}
-		quilt_warp_fbo.pop_viewport(ctx);
-		quilt_warp_fbo.disable(ctx);
+		else if (multiview_mpx_mode == MVM_WARP_GEO)
+			draw_image_warp_geometry(ctx);
 	}
 	else {
-
-		for (vi = 0; vi < nr_holo_views; ++vi) {
+		for (vi = 0; vi < nr_holo_views; ++vi)
+		{
 			volume_warp_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1686,12 +1714,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			volume_resolve_pass_compute_shader(ctx);
 		}	
 		else if (multiview_mpx_mode == MVM_WARP_GEO)
-		{
-			draw_image_warp_geometry(ctx);
-		}	
-
-		volume_warp_fbo.pop_viewport(ctx);
-		volume_warp_fbo.disable(ctx);
+			draw_image_warp_geometry(ctx);	
 	}
 }
 
@@ -1757,23 +1780,6 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 	}
 
 	else {
-		/* if (multiview_mpx_mode == MVM_WARP_GEO)
-		{
-			volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
-
-			layered_color_tex.enable(ctx, 0);
-			test.set_uniform(ctx, "color_tex", 0);
-			layered_depth_tex.enable(ctx, 1);
-			test.set_uniform(ctx, "depth_tex", 1);
-
-			test.enable(ctx);
-			test.set_uniform(ctx, "depth_value", 1.0f);
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LEQUAL);
-			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-			glDepthFunc(GL_LESS);
-			test.disable(ctx);
-		}*/
 		if (holo_mpx_mode == HM_QUILT)
 		{
 			quilt_warp_fbo.blit_to(ctx, BTB_COLOR_BIT, true);

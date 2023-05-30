@@ -17,7 +17,7 @@ void main()
 	float ortho_to_proj = abs(dot(direction_fs, normal));
 	if (artefacts && (ortho_to_proj < epsilon))
 		discard; // don't render rubber-sheets
-	//if (discard_fs > 0)
-	//	discard; // don't render "empty" geometry
+	if (discard_fs > 0)
+		discard; // don't render "empty" geometry
 	color = color_fs;
 }
