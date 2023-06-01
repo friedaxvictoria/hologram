@@ -34,7 +34,7 @@ void main()
 
 	// calculate intersection of line from target view to current point and the plane at z_far
 	vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
-	intersection_z_far.x = intersection_z_far.x - shear;
+	intersection_z_far.x -= shear;
 
 	// calculate intersection of line from source view to intersection at z_far with the plane at the current point's depth
 	vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;

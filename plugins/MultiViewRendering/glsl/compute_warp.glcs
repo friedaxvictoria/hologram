@@ -105,11 +105,11 @@ void main()
 			int64_t depth = floatBitsToInt(pt_depth);
 			int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
 			uint64_t oldPoint = col_depth[index];
-		// early depth test
-		if(point < oldPoint){
-			// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
-			atomicMin(col_depth[index],point);
-		}
+			// early depth test
+			if(point < oldPoint){
+				// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
+				atomicMin(col_depth[index],point);
+			}
 		#else
 			int point = (color_bytes.r << 24) | (color_bytes.g << 16) | (color_bytes.b << 8) | color_bytes.a;
 			if(pt_depth < 1.0)

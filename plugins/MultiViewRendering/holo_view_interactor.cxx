@@ -971,17 +971,13 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 		return false;
 	if (!baseline_shader.build_program(ctx, "baseline.glpr", true))
 		return false;
-	if (!warping_shader.build_program(ctx, "warp.glpr", true))
+	if (!vwarp_shader.build_program(ctx, "vertex_warp.glpr", true))
 		return false;
-	if (!compute_shader.build_program(ctx, "compute.glpr", true))
+	if (!compute_shader.build_program(ctx, "compute_warp.glpr", true))
 		return false;
-	if (!resolve_compute_shader.build_program(ctx, "compute_resolve.glpr", true))
+	if (!volume_resolve_compute_shader.build_program(ctx, "compute_resolve_volume.glpr", true))
 		return false;
 	if (!quilt_resolve_compute_shader.build_program(ctx, "compute_resolve_quilt.glpr", true))
-		return false;
-	if (!warping_geometry_shader.build_program(ctx, "warp_with_geometry.glpr", true))
-		return false;
-	if (!test.build_program(ctx, "test.glpr", true))
 		return false;
 
 	view_width = ctx.get_width();
@@ -989,10 +985,14 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	glGenQueries(1, &time_query);
 	glGenBuffers(1, &ssbo);
-	glNamedBufferData(ssbo,
-					  GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-					  nullptr,
-					  GL_DYNAMIC_COPY);
+
+	#ifdef ARB_gpu_shader_int64
+		glNamedBufferData(ssbo, GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+						  nullptr, GL_DYNAMIC_COPY);
+	#else
+		glNamedBufferData(ssbo, GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+						  nullptr, GL_DYNAMIC_COPY);
+	#endif 
 
 	return true;
 }
@@ -1015,7 +1015,7 @@ void holo_view_interactor::init_frame(context& ctx)
 		last_nr_viewport_columns = nr_viewport_columns;
 		last_nr_viewport_rows = nr_viewport_rows;
 		break;
-	case MVM_BASIC:
+	case MVM_CONVENTIONAL:
 		if (initiate_render_pass_recursion(ctx)) {
 			enable_surface(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
@@ -1116,10 +1116,9 @@ void holo_view_interactor::init_frame(context& ctx)
 		}
 		break;
 	case MVM_BASELINE:
-	case MVM_WARPING:
-	case MVM_WARPING_CLOSEST:
+	case MVM_VWARP:
+	case MVM_VWARP_CLOSEST:
 	case MVM_COMPUTE:
-	case MVM_WARP_GEO:
 		if (initiate_render_pass_recursion(ctx)) {
 			enable_surface(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
@@ -1150,14 +1149,14 @@ void holo_view_interactor::init_frame(context& ctx)
 	compute_clipping_planes(z_near_derived, z_far_derived, clip_relative_to_extent);
 	if (rpf & RPF_SET_PROJECTION) {
 		gl_set_projection_matrix(ctx, current_e, aspect);
-		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
+		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_CONVENTIONAL && multiview_mpx_mode != MVM_GEOMETRY) {
 			proj_source[vi] = ctx.get_projection_matrix();
 		}
 	}
 
 	if (rpf & RPF_SET_MODELVIEW) {
 		gl_set_modelview_matrix(ctx, current_e, aspect, *this);
-		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_BASIC && multiview_mpx_mode != MVM_GEOMETRY) {
+		if ((vi < nr_render_views) && multiview_mpx_mode != MVM_CONVENTIONAL && multiview_mpx_mode != MVM_GEOMETRY) {
 			modelview_source[vi] = ctx.get_modelview_matrix();
 			eye_source[vi] = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 		}
@@ -1178,7 +1177,7 @@ void holo_view_interactor::init_frame(context& ctx)
 /// this method is called in one pass over all drawables after finish frame
 void holo_view_interactor::after_finish(cgv::render::context& ctx)
 {
-	if (multiview_mpx_mode == MVM_BASIC || multiview_mpx_mode == MVM_GEOMETRY) {
+	if (multiview_mpx_mode == MVM_CONVENTIONAL || multiview_mpx_mode == MVM_GEOMETRY) {
 		if (!multi_pass_ignore_finish(ctx) && multi_pass_terminate(ctx)) {
 			disable_surface(ctx);
 			glScissor(0, 0, ctx.get_width(), ctx.get_height());
@@ -1238,7 +1237,7 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		volume_warp_fbo.push_viewport(ctx);
 		if ((!layered_fbo.is_created() || layered_fbo.get_width() != view_width ||
 			layered_fbo.get_height() != view_height || layered_depth_tex.get_depth() != 4) &&
-			(multiview_mpx_mode == MVM_GEOMETRY || multiview_mpx_mode == MVM_WARP_GEO))
+			multiview_mpx_mode == MVM_GEOMETRY)
 		{
 			layered_fbo.destruct(ctx);
 			layered_depth_tex.destruct(ctx);
@@ -1248,9 +1247,8 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			layered_fbo.create(ctx, view_width, view_height);
 		}
 	}
-	if (multiview_mpx_mode == MVM_BASELINE || multiview_mpx_mode == MVM_WARPING ||
-		multiview_mpx_mode == MVM_WARPING_CLOSEST || multiview_mpx_mode == MVM_COMPUTE ||
-		multiview_mpx_mode == MVM_WARP_GEO)
+	if (multiview_mpx_mode == MVM_BASELINE || multiview_mpx_mode == MVM_VWARP ||
+		multiview_mpx_mode == MVM_VWARP_CLOSEST || multiview_mpx_mode == MVM_COMPUTE)
 	{
 		auto& fb = render_fbo[1].ref_frame_buffer();
 		if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height) {
@@ -1264,13 +1262,10 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			render_fbo[2].ensure(ctx);
 
 			const float half_aspect = (float)res.x() / (2 * res.y());
-			heightmap = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+			heightmap_baseline = tessellator::quad(ctx, baseline_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
 										  res.x(), res.y(), tessellator::VA_TEXCOORD);
-			heightmap_warp = tessellator::quad(ctx, warping_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
+			heightmap_vwarp = tessellator::quad(ctx, vwarp_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
 											   res.x(), res.y(), tessellator::VA_TEXCOORD);
-			heightmap_warp_geometry =
-				  tessellator::quad(ctx, warping_geometry_shader, {-half_aspect, -.5f, .0f}, {half_aspect, .5f, .0f},
-									res.x(), res.y(), tessellator::VA_TEXCOORD);
 		}
 	}
 }
@@ -1316,7 +1311,7 @@ void holo_view_interactor::draw_baseline(cgv::render::context& ctx)
 		baseline_shader.set_uniform(ctx, "depth", 1);
 		baseline_shader.set_uniform(ctx, "inv_mvp_source", inv(proj_source[i] * modelview_source[i]));
 
-		heightmap.draw(ctx);
+		heightmap_baseline.draw(ctx);
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
@@ -1346,22 +1341,22 @@ void holo_view_interactor::draw_image_warp_closest(cgv::render::context& ctx)
 
 
 	color_tex.enable(ctx, 0);
-	warping_shader.set_uniform(ctx, "color_tex", 0);
+	vwarp_shader.set_uniform(ctx, "color_tex", 0);
 	depth_tex.enable(ctx, 1);
-	warping_shader.set_uniform(ctx, "depth_tex", 1);
-	warping_shader.set_uniform(ctx, "p_source", proj_source[source_idx]);
-	warping_shader.set_uniform(ctx, "eye_source", eye_source[source_idx]);
-	warping_shader.set_uniform(ctx, "eye_target", eye_target);
-	warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
-	warping_shader.set_uniform(ctx, "shear", shear);
-	warping_shader.set_uniform(ctx, "epsilon", epsilon);
-	warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+	vwarp_shader.set_uniform(ctx, "depth_tex", 1);
+	vwarp_shader.set_uniform(ctx, "p_source", proj_source[source_idx]);
+	vwarp_shader.set_uniform(ctx, "eye_source", eye_source[source_idx]);
+	vwarp_shader.set_uniform(ctx, "eye_target", eye_target);
+	vwarp_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	vwarp_shader.set_uniform(ctx, "shear", shear);
+	vwarp_shader.set_uniform(ctx, "epsilon", epsilon);
+	vwarp_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
-	warping_shader.enable(ctx);
+	vwarp_shader.enable(ctx);
 	glDisable(GL_CULL_FACE);
-	heightmap_warp.draw(ctx);
+	heightmap_vwarp.draw(ctx);
 	glEnable(GL_CULL_FACE);
-	warping_shader.disable(ctx);
+	vwarp_shader.disable(ctx);
 	color_tex.disable(ctx);
 	depth_tex.disable(ctx);
 }
@@ -1372,12 +1367,12 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 	double aspect = (double)view_width / view_height;
 	vec4 eye_target = vec4(0.5f * current_e * eye_distance * y_extent_at_focus * aspect, 0, 0, 1);
 
-	warping_shader.enable(ctx);
+	vwarp_shader.enable(ctx);
 	glDisable(GL_CULL_FACE);
-	warping_shader.set_uniform(ctx, "eye_target", eye_target);
-	warping_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
-	warping_shader.set_uniform(ctx, "epsilon", epsilon);
-	warping_shader.set_uniform(ctx, "artefacts", dis_artefacts);
+	vwarp_shader.set_uniform(ctx, "eye_target", eye_target);
+	vwarp_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
+	vwarp_shader.set_uniform(ctx, "epsilon", epsilon);
+	vwarp_shader.set_uniform(ctx, "artefacts", dis_artefacts);
 
 	for (unsigned int i = 0; i < nr_render_views; i++) {
 		texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
@@ -1386,136 +1381,19 @@ void holo_view_interactor::draw_image_warp(cgv::render::context& ctx)
 		float shear = (eye_target[0] - eye_source[i][0]) * (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
 
 		color_tex.enable(ctx, 0);
-		warping_shader.set_uniform(ctx, "color_tex", 0);
+		vwarp_shader.set_uniform(ctx, "color_tex", 0);
 		depth_tex.enable(ctx, 1);
-		warping_shader.set_uniform(ctx, "depth_tex", 1);
-		warping_shader.set_uniform(ctx, "p_source", proj_source[i]);
-		warping_shader.set_uniform(ctx, "eye_source", eye_source[i]);
-		warping_shader.set_uniform(ctx, "shear", shear);
+		vwarp_shader.set_uniform(ctx, "depth_tex", 1);
+		vwarp_shader.set_uniform(ctx, "p_source", proj_source[i]);
+		vwarp_shader.set_uniform(ctx, "eye_source", eye_source[i]);
+		vwarp_shader.set_uniform(ctx, "shear", shear);
 
-		heightmap_warp.draw(ctx);
+		heightmap_vwarp.draw(ctx);
 		color_tex.disable(ctx);
 		depth_tex.disable(ctx);
 	}
 	glEnable(GL_CULL_FACE);
-	warping_shader.disable(ctx);
-}
-
-void holo_view_interactor::draw_image_warp_geometry(cgv::render::context& ctx)
-{
-	double aspect = (double)view_width / view_height;
-	float views_x_extent = eye_distance * y_extent_at_focus * aspect;
-	float shear = (get_parallax_zero_depth() - z_far_derived) / get_parallax_zero_depth();
-
-	texture &color_tex0 = *render_fbo[0].attachment_texture_ptr("color"),
-			&depth_tex0 = *render_fbo[0].attachment_texture_ptr("depth"),
-			&color_tex1 = *render_fbo[1].attachment_texture_ptr("color"),
-			&depth_tex1 = *render_fbo[1].attachment_texture_ptr("depth"),
-			&color_tex2 = *render_fbo[2].attachment_texture_ptr("color"),
-			&depth_tex2 = *render_fbo[2].attachment_texture_ptr("depth");
-
-	warping_geometry_shader.enable(ctx);
-	glDisable(GL_CULL_FACE);
-
-	warping_geometry_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
-	warping_geometry_shader.set_uniform(ctx, "shear", shear);
-	warping_geometry_shader.set_uniform(ctx, "epsilon", epsilon);
-	warping_geometry_shader.set_uniform(ctx, "artefacts", dis_artefacts);
-	warping_geometry_shader.set_uniform(ctx, "x_offset", (float)views_x_extent / nr_holo_views);
-	warping_geometry_shader.set_uniform(ctx, "nr_render_views", nr_render_views);
-	warping_geometry_shader.set_uniform(ctx, "p_source_zero", proj_source[0]);
-	warping_geometry_shader.set_uniform(ctx, "eye_sep", (float)eye_distance);
-	warping_geometry_shader.set_uniform(ctx, "zero_parallax", (float)get_parallax_zero_depth());
-	warping_geometry_shader.set_uniform(ctx, "start_x", -views_x_extent / 2);
-
-	color_tex0.enable(ctx, 0);
-	warping_geometry_shader.set_uniform(ctx, "color_tex0", 0);
-	depth_tex0.enable(ctx, 1);
-	warping_geometry_shader.set_uniform(ctx, "depth_tex0", 1);
-	color_tex1.enable(ctx, 2);
-	warping_geometry_shader.set_uniform(ctx, "color_tex1", 2);
-	depth_tex1.enable(ctx, 3);
-	warping_geometry_shader.set_uniform(ctx, "depth_tex1", 3);
-	color_tex2.enable(ctx, 4);
-	warping_geometry_shader.set_uniform(ctx, "color_tex2", 4);
-	depth_tex2.enable(ctx, 5);
-	warping_geometry_shader.set_uniform(ctx, "depth_tex2", 5);
-
-	if (holo_mpx_mode == HM_QUILT) {
-		vi = 0;
-		while (vi < nr_holo_views) {
-			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-			volume_warp_fbo.attach(ctx, volume_holo_tex, view_index, 0, 0);
-			float eye_target = 0.5f * current_e * eye_distance * y_extent_at_focus * aspect;
-
-			glEnable(GL_SCISSOR_TEST);
-			for (GLuint i = 0; i < 4; i++) {
-				quilt_row = vi / quilt_nr_cols;
-				quilt_col = vi % quilt_nr_cols;
-				ivec4 vp(quilt_col * view_width, quilt_row * view_height, view_width, view_height);
-				glViewportIndexedf(i, vp[0], vp[1], vp[2], vp[3]);
-				glScissorIndexed(i, vp[0], vp[1], vp[2], vp[3]);
-				vi++;
-			}
-
-			warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target);
-
-			heightmap_warp_geometry.draw(ctx);
-		}
-	}
-	else {
-		for (unsigned int i = 0; i < nr_render_views; i++) {
-			vi = 0;
-			while (vi < nr_holo_views) {
-				current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
-				float eye_target = 0.5f * current_e * eye_distance * y_extent_at_focus * aspect;
-
-				texture &color_tex = *render_fbo[i].attachment_texture_ptr("color"),
-						&depth_tex = *render_fbo[i].attachment_texture_ptr("depth");
-
-				glBindFramebuffer(GL_FRAMEBUFFER, (unsigned)((size_t)layered_fbo.handle) - 1);
-				glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-									 (unsigned)((size_t)layered_depth_tex.handle) - 1, 0);
-				glClear(GL_COLOR_BUFFER_BIT);
-				glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-									 (unsigned)((size_t)layered_color_tex.handle) - 1, 0);
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				color_tex.enable(ctx, 0);
-				warping_geometry_shader.set_uniform(ctx, "color_tex", 0);
-				depth_tex.enable(ctx, 1);
-				warping_geometry_shader.set_uniform(ctx, "depth_tex", 1);
-				warping_geometry_shader.set_uniform(ctx, "p_source", proj_source[i]);
-				warping_geometry_shader.set_uniform(ctx, "eye_source", eye_source[i]);
-				warping_geometry_shader.set_uniform(ctx, "current_target_eye", eye_target);
-
-				heightmap_warp_geometry.draw(ctx);
-				color_tex.disable(ctx);
-				depth_tex.disable(ctx);
-
-				/* for (int j = 0; j < 4; j++)
-			   {
-				   glCopyImageSubData((unsigned)((size_t)layered_color_geo_tex.handle) - 1, GL_TEXTURE_2D_ARRAY, 0, 0,
-			   0, j, (unsigned)((size_t)volume_holo_tex.handle) - 1, GL_TEXTURE_3D, 0, 0, 0, vi, view_width,
-			   view_height, 1); if (++vi == nr_holo_views) break;
-			   }
-			   if (vi == nr_holo_views)
-				   break;*/
-
-				vi += 4;
-
-				glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			}
-		}
-	}	
-	color_tex0.disable(ctx);
-	depth_tex0.disable(ctx);
-	color_tex1.disable(ctx);
-	depth_tex1.disable(ctx);
-	color_tex2.disable(ctx);
-	depth_tex2.disable(ctx);
-	glEnable(GL_CULL_FACE);
-	warping_geometry_shader.disable(ctx);
+	vwarp_shader.disable(ctx);
 }
 
 void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
@@ -1578,18 +1456,19 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::context& ctx)
 {
-	resolve_compute_shader.enable(ctx);
+	volume_resolve_compute_shader.enable(ctx);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
-	resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
-	resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
+	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
+	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
 
-	glGetProgramiv((unsigned)((size_t)resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE, local_work_group);
+	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
+				   local_work_group);
 	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
 					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
 
@@ -1599,7 +1478,7 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
 	glBindImageTexture(0, 0, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	resolve_compute_shader.disable(ctx);
+	volume_resolve_compute_shader.disable(ctx);
 }
 
 void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::context& ctx)
@@ -1657,10 +1536,10 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				case MVM_BASELINE:
 					draw_baseline(ctx);
 					break;
-				case MVM_WARPING_CLOSEST:
+				case MVM_VWARP_CLOSEST:
 					draw_image_warp_closest(ctx);
 					break;
-				case MVM_WARPING:
+				case MVM_VWARP:
 					draw_image_warp(ctx);
 					break;
 				}
@@ -1679,8 +1558,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			warp_compute_shader(ctx);
 			quilt_resolve_pass_compute_shader(ctx);
 		}
-		else if (multiview_mpx_mode == MVM_WARP_GEO)
-			draw_image_warp_geometry(ctx);
 	}
 	else {
 		for (vi = 0; vi < nr_holo_views; ++vi)
@@ -1700,10 +1577,10 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			case MVM_BASELINE:
 				draw_baseline(ctx);
 				break;
-			case MVM_WARPING_CLOSEST:
+			case MVM_VWARP_CLOSEST:
 				draw_image_warp_closest(ctx);
 				break;
-			case MVM_WARPING:
+			case MVM_VWARP:
 				draw_image_warp(ctx);
 				break;
 			}
@@ -1713,8 +1590,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			warp_compute_shader(ctx);
 			volume_resolve_pass_compute_shader(ctx);
 		}	
-		else if (multiview_mpx_mode == MVM_WARP_GEO)
-			draw_image_warp_geometry(ctx);	
 	}
 }
 
@@ -1912,8 +1787,8 @@ void holo_view_interactor::create_gui()
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
-							   "enums='single view, basic view, baseline, warping, warp from closest, "
-							   "compute, geometry, warp geometry'");
+							   "enums='single view, conventional, baseline, vertex warp, vertex warp closest, "
+							   "compute warp, geometry'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
@@ -1987,14 +1862,19 @@ void holo_view_interactor::on_set(void* m)
 		holo_mpx_mode = HM_SINGLE;	  
 		update_member(&holo_mpx_mode); 
 	}
-	else if ((m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols) &&
-			 multiview_mpx_mode == MVM_COMPUTE)
+	else if (m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols)
 	{
 		glDeleteBuffers(1, &ssbo);
 		glGenBuffers(1, &ssbo);
-		glNamedBufferData(
-			  ssbo, GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-			  nullptr, GL_DYNAMIC_COPY);
+		#ifdef ARB_gpu_shader_int64
+				glNamedBufferData(
+					  ssbo, GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+					  nullptr, GL_DYNAMIC_COPY);
+		#else
+				glNamedBufferData(ssbo,
+								  GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+								  nullptr, GL_DYNAMIC_COPY);
+		#endif 
 	}
 	update_member(m);
 	post_redraw();

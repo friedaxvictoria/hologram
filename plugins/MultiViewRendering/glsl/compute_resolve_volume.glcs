@@ -29,7 +29,6 @@ void main()
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
 	if (color_at_point%255 == 0){
-		vec4 color = vec4(1,0,0,1);
 		uint left = index-1; 
 		uint right = index+1;
 		if (coord.x%screen_w == 0)
