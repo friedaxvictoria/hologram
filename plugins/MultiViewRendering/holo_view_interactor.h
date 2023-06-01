@@ -170,6 +170,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	float accumulated_time=0;
 	int count=0;
 
+	bool evaluate = false;
+
   public:
 	void set_default_values();
 
@@ -241,6 +243,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
+	void rotate_for_eval(double t, double dt);
+
 
   public:
 	///

@@ -21,6 +21,8 @@
 #include <cmath>
 #include <stdio.h>
 
+#include <plugins/cg_fltk/fltk_gl_view.h>
+
 #include "utilities.h"
 
 using namespace cgv::math;
@@ -207,6 +209,7 @@ holo_view_interactor::holo_view_interactor(const char* name)
 	left_mode = right_mode = 0;
 	left_stick = right_stick = trigger = cgv::math::fvec<float, 2>(0.0f);
 	connect(cgv::gui::get_animation_trigger().shoot, this, &holo_view_interactor::timer_event);
+	connect(cgv::gui::get_animation_trigger().shoot, this, &holo_view_interactor::rotate_for_eval);
 
 	fix_view_up_dir = false;
 	stereo_translate_in_model_view = false;
@@ -1688,6 +1691,26 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			  << ", FPS: " << 1000000000.0 / elapsed_time << std::endl;
 }
 
+void holo_view_interactor::rotate_for_eval(double t, double dt)
+{
+	if (evaluate) {
+		static const bool _on = true, _off = false;
+
+		vec3 curr_pos = get_eye();
+		float frac = 3.14159265359 / 180;
+
+		dynamic_cast<fltk_gl_view*>(get_context())->set_void("instant_redraw", "bool", &_on);
+		dynamic_cast<fltk_gl_view*>(get_context())->set_void("vsync", "bool", &_off);
+
+		vec3 new_pos = vec3(curr_pos[0] * cos(frac) - curr_pos[2] * sin(frac), curr_pos[1],
+							curr_pos[2] * cos(frac) + curr_pos[0] * sin(frac));
+		set_eye_keep_extent(new_pos);
+
+		dynamic_cast<fltk_gl_view*>(get_context())->set_void("instant_redraw", "bool", &_off);
+
+	}
+}
+
 ///
 void holo_view_interactor::draw(cgv::render::context& ctx)
 {
@@ -1804,6 +1827,7 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "discard artefacts", dis_artefacts, "check");
 			add_member_control(this, "show holes", show_holes, "check");
+			add_member_control(this, "Start Evaluation Run", evaluate, "toggle");
 			add_member_control(this, "Generate Hologram", generate_hologram, "toggle");
 			add_member_control(this, "Write To File", display_write_to_file, "toggle");
 			end_tree_node(multiview_mpx_mode);
