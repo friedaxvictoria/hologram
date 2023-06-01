@@ -97,4 +97,5 @@ class mesh_viewer :
 		void finish_frame(context& ctx);
 		bool self_reflect(cgv::reflect::reflection_handler& srh);
 		void create_gui();
+		void focus_mesh();
    };

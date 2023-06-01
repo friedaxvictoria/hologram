@@ -165,13 +165,17 @@ void mesh_viewer::process_mesh_for_rendering(context& ctx, bool update_view = tr
 		//"clip_relative_to_extent",
 		//   true); // comment this line to use default behaviour of adaptating znear/zfar to scene
 	}
+	focus_mesh();
+
+	// ensure that materials are presented in gui
+	post_recreate_gui();
+}
+
+void mesh_viewer::focus_mesh() {
 	// focus view on new mesh
 	view->set_scene_extent(M_bbox);
 	view->set_focus(M_bbox.get_center());
 	view->set_y_extent_at_focus(M_bbox.get_extent().length());
-
-	// ensure that materials are presented in gui
-	post_recreate_gui();
 }
 
 /// helper function that will make sure we have a per-vertex color attribute

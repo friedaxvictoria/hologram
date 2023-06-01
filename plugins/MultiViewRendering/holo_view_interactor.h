@@ -167,10 +167,12 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// for performance measurements
 	GLuint64 elapsed_time;
 	GLuint time_query;
+	vec3 eval_pos;
+	double angle_frac = 3.14159265359 / 180;
 	float accumulated_time=0;
 	int count=0;
-
-	bool evaluate = false;
+	bool evaluate = false, reset_view_for_eval = false;
+	const bool _on = true, _off = false;
 
   public:
 	void set_default_values();
@@ -243,7 +245,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
-	void rotate_for_eval(double t, double dt);
+	void toggle_eval();
 
 
   public:
