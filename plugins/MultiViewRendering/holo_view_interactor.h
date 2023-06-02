@@ -163,6 +163,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// shader storage buffer object for warping with compute shader
 	GLuint ssbo;
 	GLint local_work_group[3];
+	bool splat = true;
 
 	// for performance measurements
 	GLuint64 elapsed_time;

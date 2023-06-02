@@ -1470,6 +1470,7 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
 	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	volume_resolve_compute_shader.set_uniform(ctx, "splat", splat);
 
 	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
@@ -1496,6 +1497,7 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 
 	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	quilt_resolve_compute_shader.set_uniform(ctx, "splat", splat);
 
 	glGetProgramiv((unsigned)((size_t)quilt_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
@@ -1836,9 +1838,10 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
-			add_member_control(this, "discard artefacts", dis_artefacts, "check");
-			add_member_control(this, "show holes", show_holes, "check");
-			add_member_control(this, "reset view when evaluating", reset_view_for_eval, "check");
+			add_member_control(this, "Discard Artefacts", dis_artefacts, "check");
+			add_member_control(this, "Show Holes", show_holes, "check");
+			add_member_control(this, "Do Splatting", splat, "check");
+			add_member_control(this, "Reset View When Evaluating", reset_view_for_eval, "check");
 			connect_copy(add_member_control(this, "Start Evaluation Run", evaluate, "toggle")->value_change,
 						 rebind(this, &holo_view_interactor::toggle_eval));
 			add_member_control(this, "Generate Hologram", generate_hologram, "toggle");

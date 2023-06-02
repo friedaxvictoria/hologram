@@ -7,6 +7,8 @@ layout(binding = 0) uniform writeonly image2D color_tex;
 uniform uint screen_w;
 uniform uint quilt_cols;
 
+uniform bool splat;
+
 layout(std430, binding = 0) buffer storage_buffer
 {
     int col_depth[];
@@ -22,7 +24,7 @@ void main()
 	int color_at_point = col_depth[index];
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
-	if (color_at_point%255 == 0){
+	if (splat && color_at_point%255 == 0){
 		uint left = index-1; 
 		uint right = index+1;
 		if (coord.x%screen_w == 0)
@@ -40,9 +42,9 @@ void main()
 		float alpha = ((color_int_left & mask) + (color_int_right) & mask)/500.0;
 
 		if (alpha != 0)
-			imageStore(color_tex, coord, vec4(red,green,blue,alpha));
+			imageStore(color_tex, coord, vec4(red,green,blue,1));
 	}
-	else{
+	else if (splat){
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		uint mask = ~(0xffffffff << 8);
 		float red = ((color_at_point >> 24) & mask)/255.0;
@@ -50,5 +52,16 @@ void main()
 		float blue = ((color_at_point >> 8) & mask)/255.0;
 		
 		imageStore(color_tex, coord, vec4(red,green,blue,1.0));
+	}
+	else{
+		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+		uint mask = ~(0xffffffff << 8);
+		float red = ((color_at_point >> 24) & mask)/255.0;
+		float green = ((color_at_point >> 16) & mask)/255.0;
+		float blue = ((color_at_point >> 8) & mask)/255.0;
+		float alpha = (color_at_point & mask)/255.0;
+		
+		if (alpha != 0)
+			imageStore(color_tex, coord, vec4(red,green,blue,1.0));
 	}
 }
