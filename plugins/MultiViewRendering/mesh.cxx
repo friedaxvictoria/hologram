@@ -178,6 +178,10 @@ void mesh_viewer::focus_mesh() {
 	view->set_y_extent_at_focus(M_bbox.get_extent().length());
 }
 
+int mesh_viewer::get_number_positions() { 
+	return M.get_nr_positions(); 
+}
+
 /// helper function that will make sure we have a per-vertex color attribute
 void mesh_viewer::ensure_mesh_colors()
 {

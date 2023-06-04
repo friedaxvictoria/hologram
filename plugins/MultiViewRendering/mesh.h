@@ -98,4 +98,6 @@ class mesh_viewer :
 		bool self_reflect(cgv::reflect::reflection_handler& srh);
 		void create_gui();
 		void focus_mesh();
+
+		int get_number_positions();
    };

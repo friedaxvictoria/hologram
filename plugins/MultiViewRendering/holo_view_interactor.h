@@ -14,6 +14,8 @@
 #include <cgv/reflect/reflect_enum.h>
 #include <cgv_gl/gl/gl.h>
 #include <glsu/GL/glsu.h>
+#include <fstream>
+
 #if defined(_WINDOWS) || defined(WIN32) || defined(WIN64)
 #undef max
 #undef min
@@ -172,8 +174,10 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	double angle_frac = 3.14159265359 / 180;
 	float accumulated_time=0;
 	int count=0;
-	bool evaluate = false, reset_view_for_eval = false;
+	bool evaluate = false, reset_view_for_eval = false, set_up_file_for_eval = false;
 	const bool _on = true, _off = false;
+	std::vector<double> time_measurements;
+	std::ofstream file;
 
   public:
 	void set_default_values();
@@ -247,6 +251,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void compute_holo_views(cgv::render::context& ctx);
 	void toggle_eval();
+	void set_up_eval_file();
 
 
   public:
