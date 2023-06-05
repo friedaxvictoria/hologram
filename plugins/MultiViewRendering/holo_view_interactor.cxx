@@ -20,7 +20,8 @@
 #include <cgv/type/variant.h>
 #include <cmath>
 #include <stdio.h>
-#include<fstream>
+#include <fstream>
+#include <filesystem>
 
 #include <plugins/cg_fltk/fltk_gl_view.h>
 
@@ -1004,6 +1005,9 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 			set_up_eval_file();
 		}
 	}
+	else {
+		set_up_eval_file();
+	}
 
 	return true;
 }
@@ -1293,14 +1297,22 @@ void holo_view_interactor::disable_surface(cgv::render::context& ctx)
 		quilt_warp_fbo.pop_viewport(ctx);
 		quilt_warp_fbo.disable(ctx);
 		if (quilt_write_to_file) {
-			quilt_holo_tex.write_to_file(ctx, "quilt.png");
+			std::filesystem::path cwd = std::filesystem::current_path();
+			if (cwd.string().find("res") != std::string::npos)
+				quilt_holo_tex.write_to_file(ctx, "../quilt.png");
+			else
+				quilt_holo_tex.write_to_file(ctx, "quilt.png");
 			quilt_write_to_file = false;
 			on_set(&quilt_write_to_file);
 		}
 	}
 	else {
 		if (volume_write_to_file) {
-			volume_holo_tex.write_to_file(ctx, "volume.png", view_index);
+			std::filesystem::path cwd = std::filesystem::current_path();
+			if (cwd.string().find("res") != std::string::npos)
+				volume_holo_tex.write_to_file(ctx, "../volume.png", view_index);
+			else
+				volume_holo_tex.write_to_file(ctx, "volume.png", view_index);
 			volume_write_to_file = false;
 			on_set(&volume_write_to_file);
 		}
@@ -1697,7 +1709,6 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 				  << ", Source views : " << nr_render_views << ", FPS: " << 1000000000.0 / elapsed_time << std::endl;*/
 
 		count++;
-		std::cout << count << std::endl;
 		accumulated_time += 1000000000.0 / elapsed_time;
 
 		if (count % 30 == 0) {
@@ -1714,7 +1725,11 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			evaluate = false;
 			update_member(&evaluate);
 
-			file.open("measurements.csv", std::ofstream::in | std::ofstream::app);
+			std::filesystem::path cwd = std::filesystem::current_path();
+			if (cwd.string().find("res") != std::string::npos)
+				file.open("../measurements.csv", std::ofstream::in | std::ofstream::app);
+			else
+				file.open("measurements.csv", std::ofstream::in | std::ofstream::app);
 			file << nr_render_views << ", " << multiview_mpx_mode << ", "
 				   << mesh->get_number_positions() << ", - ";
 			for (int i = 0; i < time_measurements.size(); i++) {
@@ -1735,7 +1750,11 @@ void holo_view_interactor::set_up_eval_file() {
 	}
 
 	if (answer == 1 || set_up_file_for_eval == false) {
-		file.open("measurements.csv");
+		std::filesystem::path cwd = std::filesystem::current_path();
+		if (cwd.string().find("res") != std::string::npos) 
+			file.open("../measurements.csv");
+		else
+			file.open("measurements.csv");
 		file << "nr render views, mode, nr vertices, empty";
 		for (int i = 0; i < 36; i++) {
 			file << ", " << std::to_string(i);
