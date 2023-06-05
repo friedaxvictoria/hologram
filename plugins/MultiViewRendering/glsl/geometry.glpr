@@ -3,7 +3,7 @@ vertex_file:brdf.glsl
 vertex_file:view.glsl
 geometry_file:geometry.glgs
 geometry_file:view.glsl
-fragment_file:geometry.glfs
+fragment_file:textured_surface.glfs
 fragment_file:fragment.glfs
 fragment_file:a_buffer_lib.glfs
 fragment_file:side.glfs
