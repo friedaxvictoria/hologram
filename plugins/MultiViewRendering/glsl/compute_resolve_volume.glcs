@@ -1,5 +1,7 @@
 #version 460 core
 
+#define SPLAT 0
+
 layout (local_size_x = 8, local_size_y = 64) in;
 
 layout(binding = 0) uniform writeonly image3D color_tex;
@@ -30,37 +32,37 @@ void main()
 	vec2 image_coord = vec2(coord.x%screen_w,coord.y%screen_h);
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
-	
-	if (splat && color_at_point%255 == 0){
-		uint left = index-1; 
-		uint right = index+1;
-		if (coord.x%screen_w == 0)
-			left=index;
-		else if (coord.x%screen_w == screen_w-1)
-			right = index;
-		int color_int_left = col_depth[left];
-		int color_int_right = col_depth[right];
+	#if SPLAT == 1
+		if (color_at_point%255 == 0){
+			uint left = index-1; 
+			uint right = index+1;
+			if (coord.x%screen_w == 0)
+				left=index;
+			else if (coord.x%screen_w == screen_w-1)
+				right = index;
+			int color_int_left = col_depth[left];
+			int color_int_right = col_depth[right];
 
-		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-		uint mask = ~(0xffffffff << 8);
-		float red = (((color_int_left >> 24) & mask) + ((color_int_right >> 24) & mask))/500.0;
-		float green = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
-		float blue = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
-		float alpha = ((color_int_left & mask) + (color_int_right) & mask)/500.0;
+			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+			uint mask = ~(0xffffffff << 8);
+			float red = (((color_int_left >> 24) & mask) + ((color_int_right >> 24) & mask))/500.0;
+			float green = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
+			float blue = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
+			float alpha = ((color_int_left & mask) + (color_int_right) & mask)/500.0;
 
-		if (alpha != 0)
+			if (alpha != 0)
+				imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
+		}
+		else{
+			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+			uint mask = ~(0xffffffff << 8);
+			float red = ((color_at_point >> 24) & mask)/255.0;
+			float green = ((color_at_point >> 16) & mask)/255.0;
+			float blue = ((color_at_point >> 8) & mask)/255.0;
+
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-	}
-	else if (splat){
-		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-		uint mask = ~(0xffffffff << 8);
-		float red = ((color_at_point >> 24) & mask)/255.0;
-		float green = ((color_at_point >> 16) & mask)/255.0;
-		float blue = ((color_at_point >> 8) & mask)/255.0;
-
-		imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-	}
-	else{
+		}
+	#else
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		uint mask = ~(0xffffffff << 8);
 		float red = ((color_at_point >> 24) & mask)/255.0;
@@ -69,5 +71,5 @@ void main()
 		float alpha = (color_at_point & mask)/255.0;
 		if (alpha != 0)
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-	}
+	#endif
 }
