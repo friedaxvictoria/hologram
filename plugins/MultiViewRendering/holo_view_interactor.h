@@ -107,7 +107,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_CONVENTIONAL, MVM_BASELINE, MVM_VWARP, MVM_VWARP_CLOSEST, MVM_COMPUTE, MVM_GEOMETRY};
+	enum MultiViewMode {MVM_SINGLE, MVM_CONVENTIONAL, MVM_REPROJECT, MVM_VWARP, MVM_VWARP_CLOSEST, MVM_COMPUTE, MVM_GEOMETRY};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -145,9 +145,9 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::shader_program quilt_prog, volume_prog;
 	cgv::render::texture volume_holo_tex, quilt_holo_tex;
 
-	cgv::render::shader_program baseline_shader, vwarp_shader, compute_shader,
+	cgv::render::shader_program reproject_shader, vwarp_shader, compute_shader,
 		  volume_resolve_compute_shader, quilt_resolve_compute_shader;
-	GPUgeometry heightmap_baseline, heightmap_vwarp;
+	GPUgeometry heightmap_reproject, heightmap_vwarp;
 
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
 	cgv::render::frame_buffer quilt_warp_fbo, volume_warp_fbo;
@@ -243,7 +243,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void enable_surface(cgv::render::context& ctx);
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
-	void draw_baseline(cgv::render::context& ctx);
+	void draw_reproject(cgv::render::context& ctx);
 	void draw_image_warp(cgv::render::context& ctx);
 	void draw_image_warp_closest(cgv::render::context& ctx);
 	void warp_compute_shader(cgv::render::context& ctx);
