@@ -991,7 +991,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 						  nullptr, GL_DYNAMIC_COPY);
 	#endif
 
-	#if EVAL == 1
 	std::ifstream in("measurements.csv");
 	if (in.is_open()) {
 		in.seekg(0, std::ios::end);
@@ -1003,7 +1002,6 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	else {
 		set_up_eval_file();
 	}
-	#endif
 
 	return true;
 }
@@ -1134,6 +1132,7 @@ void holo_view_interactor::init_frame(context& ctx)
 	case MVM_VWARP:
 	case MVM_VWARP_CLOSEST:
 	case MVM_COMPUTE:
+	case MVM_COMPUTE_SPLAT:
 		if (initiate_render_pass_recursion(ctx)) {
 			enable_surface(ctx);
 			last_do_viewport_splitting = do_viewport_splitting;
@@ -1265,7 +1264,7 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		}
 	}
 	if (multiview_mpx_mode == MVM_REPROJECT || multiview_mpx_mode == MVM_VWARP ||
-		multiview_mpx_mode == MVM_VWARP_CLOSEST || multiview_mpx_mode == MVM_COMPUTE)
+		multiview_mpx_mode == MVM_VWARP_CLOSEST || multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT)
 	{
 		auto& fb = render_fbo[1].ref_frame_buffer();
 		if (fb.get_width() != (int)view_width || fb.get_height() != (int)view_height) {
@@ -1493,7 +1492,10 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
 	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
-	volume_resolve_compute_shader.set_uniform(ctx, "splat", splat);
+	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
+		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
+	else
+		volume_resolve_compute_shader.set_uniform(ctx, "splat", false);
 
 	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
@@ -1520,7 +1522,10 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 
 	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
 	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
-	quilt_resolve_compute_shader.set_uniform(ctx, "splat", splat);
+	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
+		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
+	else
+		volume_resolve_compute_shader.set_uniform(ctx, "splat", false);
 
 	glGetProgramiv((unsigned)((size_t)quilt_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
@@ -1587,7 +1592,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		glDisable(GL_SCISSOR_TEST);
 		#endif
 		
-		if (multiview_mpx_mode == MVM_COMPUTE) {
+		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
 			warp_compute_shader(ctx);
 			quilt_resolve_pass_compute_shader(ctx);
 		}
@@ -1622,7 +1627,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		}
 		#endif
 
-		if (multiview_mpx_mode == MVM_COMPUTE) {
+		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
 			warp_compute_shader(ctx);
 			volume_resolve_pass_compute_shader(ctx);
 		}
@@ -1721,7 +1726,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 							eval_pos[2] * cos(count * angle_frac) + eval_pos[0] * sin(count * angle_frac));
 		set_eye_keep_extent(new_pos);
 
-		if (count >= 3 * 360) {
+		if (count >= 3*360) {
 			dynamic_cast<fltk_gl_view*>(get_context())->set_void("instant_redraw", "bool", &_off);
 			evaluate = false;
 			update_member(&evaluate);
@@ -1732,7 +1737,7 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			else
 				file.open("measurements.csv", std::ofstream::in | std::ofstream::app);
 			file << nr_render_views << ", " << multiview_mpx_mode << ", "
-				   << mesh->get_number_positions() << ", - ";
+				   << mesh->get_number_positions() << ", "<< holo_mpx_mode;
 			for (int i = 0; i < time_measurements.size(); i++) {
 				file << ", " << time_measurements[i];
 			}
@@ -1756,7 +1761,7 @@ void holo_view_interactor::set_up_eval_file() {
 			file.open("../measurements.csv");
 		else
 			file.open("measurements.csv");
-		file << "nr render views, mode, nr vertices, empty";
+		file << "nr render views, mode, nr vertices, storage";
 		for (int i = 0; i < 36; i++) {
 			file << ", " << std::to_string(i);
 		}
@@ -1890,7 +1895,7 @@ void holo_view_interactor::create_gui()
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
 							   "enums='single view, conventional, reproject, vertex warp, vertex warp closest, "
-							   "compute warp, geometry'");
+							   "compute warp, compute warp w/ splat, geometry'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");
@@ -1906,7 +1911,6 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Blit Offset y", blit_offset_y, "value_slider", "min=0;max=1000;ticks=true");
 			add_member_control(this, "Discard Artefacts", dis_artefacts, "check");
 			add_member_control(this, "Show Holes", show_holes, "check");
-			add_member_control(this, "Do Splatting", splat, "check");
 			add_member_control(this, "Reset View When Evaluating", reset_view_for_eval, "check");
 			connect_copy(add_member_control(this, "Set Up File", set_up_file_for_eval, "toggle")->value_change,
 						 rebind(this, &holo_view_interactor::set_up_eval_file));

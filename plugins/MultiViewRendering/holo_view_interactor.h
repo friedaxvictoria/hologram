@@ -107,7 +107,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
   public:
 	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
 	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_CONVENTIONAL, MVM_REPROJECT, MVM_VWARP, MVM_VWARP_CLOSEST, MVM_COMPUTE, MVM_GEOMETRY};
+	enum MultiViewMode {MVM_SINGLE, MVM_CONVENTIONAL, MVM_REPROJECT, MVM_VWARP, MVM_VWARP_CLOSEST, MVM_COMPUTE_SPLAT,MVM_COMPUTE, MVM_GEOMETRY};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
@@ -165,7 +165,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// shader storage buffer object for warping with compute shader
 	GLuint ssbo;
 	GLint local_work_group[3];
-	bool splat = true;
 
 	// for performance measurements
 	GLuint64 elapsed_time;
