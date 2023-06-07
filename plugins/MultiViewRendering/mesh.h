@@ -44,7 +44,7 @@ class mesh_viewer :
 	cgv::render::mesh_render_info mesh_info, mesh_for_geo_info, mesh_for_holes_info;
 	cgv::render::box3 M_bbox;
 	cgv::render::box_wire_render_data<> M_bbox_rd;
-	bool meshfile_supplies_colors, invent_missing_colors = false;
+	bool meshfile_supplies_colors, invent_missing_colors = true;
 
 	bool update_view_after_mesh_processed = false;
 

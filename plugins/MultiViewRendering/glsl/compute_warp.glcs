@@ -1,7 +1,8 @@
 #version 460 core
 
 #extension GL_KHR_shader_subgroup_clustered: require
-#extension ARB_gpu_shader_int64: enable
+#extension GL_NV_gpu_shader5 : enable
+#extension GL_NV_shader_atomic_int64: enable
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
@@ -100,20 +101,27 @@ void main()
 		//uint minDepth = subgroupClusteredMin(depth, 2);
 		//if(idXOr != 0 || minDepth == depth)
 
-		#ifdef ARB_gpu_shader_int64
-			//in theory
-			int64_t depth = floatBitsToInt(pt_depth);
-			int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
-			uint64_t oldPoint = col_depth[index];
-			// early depth test
-			if(point < oldPoint){
-				// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
-				atomicMin(col_depth[index],point);
-			}
-		#else
+		//#ifdef ARB_gpu_shader_int64
+		/*int64_t depth = floatBitsToInt(pt_depth);
+		int64_t point = (depth << 32) | (int(color_bytes.r) << 24) | (int(color_bytes.g) << 16) | (int(color_bytes.b) << 8) | int(color_bytes.a);
+		uint64_t oldPoint = col_depth[index];
+		// early depth test
+		if(point < oldPoint){
+			// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
+			atomicMin(col_depth[index],point);
+		}*/
+		/*#else
 			int point = (color_bytes.r << 24) | (color_bytes.g << 16) | (color_bytes.b << 8) | color_bytes.a;
 			if(pt_depth < 1.0)
 				atomicExchange(col_depth[index],point);
-		#endif 
+		#endif */
+		int depth = floatBitsToInt(pt_depth);
+		int point = (depth << 18) | (int(color_bytes.a)<<17) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
+		uint oldPoint = col_depth[index];
+		// early depth test
+		if(point < oldPoint){
+			// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
+			atomicMin(col_depth[index],point);
+		}
 	}
 }

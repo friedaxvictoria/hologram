@@ -998,16 +998,12 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	glGenQueries(1, &time_query);
 	//generate shader storage buffer for compute shader warping
 	glGenBuffers(1, &ssbo);
+	glBindBuffer(GL_ARRAY_BUFFER, ssbo);
 
 	// set up size of ssbo depending on whether or not 64 bit integers are supported in shader
-	#ifdef ARB_gpu_shader_int64
-		glNamedBufferData(ssbo,
-						  GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-						  nullptr, GL_DYNAMIC_COPY);
-	#else
-		glNamedBufferData(ssbo, GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-						  nullptr, GL_DYNAMIC_COPY);
-	#endif
+	glNamedBufferData(ssbo,
+						GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+						nullptr, GL_DYNAMIC_COPY);
 
 	// in case the csv file is empty or doesn't exist, set it up for evaluation
 	std::ifstream in("measurements.csv");
@@ -1474,8 +1470,8 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.enable(ctx);
 
 	// attach shader storage buffer object
-	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
 	color_tex0.enable(ctx, 0);

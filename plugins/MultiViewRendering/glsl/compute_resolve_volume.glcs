@@ -65,10 +65,11 @@ void main()
 	#else
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		uint mask = ~(0xffffffff << 8);
-		float red = ((color_at_point >> 24) & mask)/255.0;
-		float green = ((color_at_point >> 16) & mask)/255.0;
-		float blue = ((color_at_point >> 8) & mask)/255.0;
-		float alpha = (color_at_point & mask)/255.0;
+		float red = ((color_at_point >> 16) & mask)/255.0;
+		float green = ((color_at_point >> 8) & mask)/255.0;
+		float blue = (color_at_point & mask)/255.0;
+		//float alpha = ((color_at_point >> 17) & 0xf)/255.0;
+		float alpha = color_at_point & (1 << 17);
 		if (alpha != 0)
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
 	#endif
