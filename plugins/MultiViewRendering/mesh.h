@@ -39,7 +39,6 @@ class mesh_viewer :
 	typedef mesh_type::vec3i vec3i;
 
   protected:
-	float fac = 0.00001;
 	std::string mesh_filename;
 	mesh_type M;
 	cgv::render::mesh_render_info mesh_info, mesh_for_geo_info, mesh_for_holes_info;
@@ -69,8 +68,8 @@ class mesh_viewer :
 
 	vec3 cam_dir;
 
-	shader_program geometry_shader; // the mesh-based baseline approach
-	shader_program holes_shader;	// for displaying the holes
+	shader_program geometry_shader; // program for the geometry approach
+	shader_program holes_shader;	// program for the hole visualisation
 
 	// variables for geometry shader render call
 	float zero_parallax, eye_distance, num_holo_views, eye;
@@ -89,9 +88,6 @@ class mesh_viewer :
 		bool init(context& ctx);
 		void clear(context& ctx);
 		void init_frame(context& ctx);
-		void draw_holes(context& ctx);
-		void draw_geometry_shader(context& ctx);
-		void set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views);
 		void draw_surface(context& ctx, bool opaque_part);
 		void draw(context& ctx);
 		void finish_frame(context& ctx);
@@ -99,5 +95,12 @@ class mesh_viewer :
 		void create_gui();
 		void focus_mesh();
 
+		// method that visualises holes by simply rendering the correct geometry in green
+		void draw_holes(context& ctx);
+		// do exactly the same as in normal draw method but with geometry shader call instead
+		void draw_geometry_shader(context& ctx);
+		// store variables for the computation of the projection matrices in the geometry shader
+		void set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views);
+		// returns number of vertices for the current mesh
 		int get_number_positions();
    };

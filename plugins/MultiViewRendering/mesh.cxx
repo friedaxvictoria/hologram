@@ -89,7 +89,7 @@ mesh_viewer::mesh_viewer() : node("mesh_viewer")
 	surface_color = rgb(0.75f, 0.25f, 1.0f);
 	illumination_mode = IM_ONE_SIDED;
 
-	// sphere_style.surface_color = rgb(0.8f, 0.3f, 0.3f);
+	sphere_style.surface_color = rgb(0.8f, 0.3f, 0.3f);
 	cone_style.surface_color = rgb(0.6f, 0.5f, 0.4f);
 
 	eye_distance = 0.3f;
@@ -101,10 +101,6 @@ std::string mesh_viewer::get_type_name() const { return "mesh_viewer"; }
 /// called when an instance of this class is registered with the Framework
 void mesh_viewer::on_register()
 {
-	// --NOTE-- obviously, a window can only have one title, so it should be
-	//  in the most central, "main"
-	//          class that the project has (which this one, as it just provides some geometry to display, might
-	//          not be anymore at some point)
 	cgv::gui::application::get_window(0)->set("title", "Multi-View Rendering for Holographic Displays");
 }
 
@@ -159,12 +155,8 @@ void mesh_viewer::process_mesh_for_rendering(context& ctx, bool update_view = tr
 
 	// update view
 	// make sure we have the view available
-	if (!view) {
+	if (!view)
 		view = dynamic_cast<stereo_view*>(find_view_as_node());
-		// dynamic_cast<node*>(view)->set(
-		//"clip_relative_to_extent",
-		//   true); // comment this line to use default behaviour of adaptating znear/zfar to scene
-	}
 	focus_mesh();
 
 	// ensure that materials are presented in gui
@@ -276,6 +268,7 @@ void mesh_viewer::init_frame(context& ctx){}
 void mesh_viewer::draw_holes(context& ctx)
 {
 	glDisable(GL_CULL_FACE);
+	//disable depth test so that hole visualisation is always in the back
 	glDisable(GL_DEPTH_TEST);
 
 	mesh_for_holes_info.draw_all(ctx);
@@ -386,8 +379,7 @@ void mesh_viewer::draw(context& ctx)
 		if (with_geometry)
 			draw_geometry_shader(ctx);
 		else
-			draw_surface(ctx, true); // --NOTE-- set parameter to true once done testing the image warp to
-									 // re-enable correct handling of transparent mesh parts
+			draw_surface(ctx, true);
 	}
 
 	if (show_bbox)
@@ -405,9 +397,7 @@ void mesh_viewer::finish_frame(context& ctx)
 
 		}
 		else
-			draw_surface(ctx, false); // --NOTE-- uncomment once done testing the image warp to re-enable correct
-									 // handling
-								  // of transparent mesh parts
+			draw_surface(ctx, false); 
 }
 
 /// reflects all our class fields that we want to be settable via config file
