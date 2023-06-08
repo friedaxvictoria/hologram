@@ -13,7 +13,7 @@ uniform bool splat;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
-    int col_depth[];
+    uint col_depth[];
 };
 
 void main()
@@ -23,7 +23,7 @@ void main()
 	// calculate index for looking up values in the storage buffer
 	// no further calculations for the placement of the point has to be made because storage buffer is constructed like quilt
 	uint index = coord.x+coord.y*(screen_w*quilt_cols);
-	int color_at_point = col_depth[index];
+	uint color_at_point = col_depth[index];
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
 		#if SPLAT == 1
