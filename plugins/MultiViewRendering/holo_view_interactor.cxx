@@ -26,7 +26,7 @@
 #include "utilities.h"
 
 #define COMPUTE 0
-#define EVAL 1
+#define EVAL 0
 
 using namespace cgv::math;
 using namespace cgv::signal;
@@ -1004,7 +1004,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	// set up size of ssbo depending on whether or not 64 bit integers are supported in shader
 	glNamedBufferData(ssbo,
-						GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+						GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
 						nullptr, GL_DYNAMIC_COPY);
 
 	// in case the csv file is empty or doesn't exist, set it up for evaluation
@@ -1473,7 +1473,8 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 
 	// attach shader storage buffer object
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	uint8_t clear_color[4] = {0, 0, 0, 254};
+	glClearNamedBufferData(ssbo, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, &clear_color);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
 
 	color_tex0.enable(ctx, 0);
@@ -2022,15 +2023,9 @@ void holo_view_interactor::on_set(void* m)
 	else if (m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols) {
 		glDeleteBuffers(1, &ssbo);
 		glGenBuffers(1, &ssbo);
-		#ifdef ARB_gpu_shader_int64
-				glNamedBufferData(
-					  ssbo, GLsizeiptr(sizeof(unsigned long long) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-					  nullptr, GL_DYNAMIC_COPY);
-		#else
-				glNamedBufferData(ssbo,
-								  GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
-								  nullptr, GL_DYNAMIC_COPY);
-		#endif
+		glNamedBufferData(ssbo,
+							GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+							nullptr, GL_DYNAMIC_COPY);
 	}
 	update_member(m);
 	post_redraw();
