@@ -1,6 +1,6 @@
 #version 460 core
 
-#define SPLAT 0
+#define SPLAT 1
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
@@ -46,7 +46,7 @@ void main()
 			float alpha = ((color_int_left & (1 << 24)) >> 24 + (color_int_right & (1 << 24)) >> 24)/2.0;
 
 			if (alpha != 0)
-				imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
+				imageStore(color_tex, coord, vec4(red, green, blue,1));
 		}
 		else{
 			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
@@ -55,7 +55,7 @@ void main()
 			float green = ((color_at_point >> 8) & mask)/255.0;
 			float blue = (color_at_point & mask)/255.0;
 
-			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
+			imageStore(color_tex, coord, vec4(red, green, blue,1));
 		}
 	#else
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html

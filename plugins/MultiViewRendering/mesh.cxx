@@ -24,7 +24,6 @@
 #include <cgv/render/managed_frame_buffer.h>
 #include <cgv/render/clipped_view.h>
 #include "tessellator.h"
-#include "utilities.h"
 #include "mesh.h"
 
 using namespace cgv::base;

@@ -23,7 +23,6 @@
 #include <fstream>
 #include <filesystem>
 #include <plugins/cg_fltk/fltk_gl_view.h>
-#include "utilities.h"
 
 #define COMPUTE 0
 #define EVAL 0
@@ -993,8 +992,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
-	view_width = 720;
-	view_height = 576;
+	//view_width = 720;
+	//view_height = 576;
 
 	// generate time query for evaluation
 	glGenQueries(1, &time_query);
