@@ -1940,7 +1940,7 @@ void holo_view_interactor::create_gui()
 			align("\a");
 			add_member_control(this, "Render multiplexing", multiview_mpx_mode, "dropdown",
 							   "enums='single view, conventional, reproject, vertex warp, vertex warp closest, "
-							   "compute warp, compute warp w/ splat, geometry'");
+							   "compute warp splat, compute warp, geometry'");
 			add_member_control(this, "Holo multiplexing", holo_mpx_mode, "dropdown",
 							   "enums='single view,quilt,volume'");
 			add_member_control(this, "View Width", view_width, "value_slider", "min=640;max=2000;ticks=true");

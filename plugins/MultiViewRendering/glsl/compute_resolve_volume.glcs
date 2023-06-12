@@ -32,6 +32,7 @@ void main()
 	vec2 image_coord = vec2(coord.x%screen_w,coord.y%screen_h);
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
+	uint mask = ~(0xffffffff << 8);
 	#if SPLAT == 1
 		uint visible = (color_at_point & (1 << 24)) >> 24;
 		if (visible == 0){
@@ -45,18 +46,16 @@ void main()
 			uint color_int_right = col_depth[right];
 
 			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-			uint mask = ~(0xffffffff << 8);
 			float red = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
 			float green = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
 			float blue = ((color_int_left& mask) + (color_int_right & mask))/500.0;
-			float alpha = ((color_int_left & (1 << 24)) >> 24 + (color_int_right & (1 << 24)) >> 24)/2.0;
+			float alpha = (((color_int_left & (1 << 24)) >> 24) + ((color_int_right & (1 << 24)) >> 24))/2.0;
 
 			if (alpha != 0)
 				imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
 		}
 		else{
 			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-			uint mask = ~(0xffffffff << 8);
 			float red = ((color_at_point >> 16) & mask)/255.0;
 			float green = ((color_at_point >> 8) & mask)/255.0;
 			float blue = (color_at_point & mask)/255.0;
@@ -65,7 +64,6 @@ void main()
 		}
 	#else
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-		uint mask = ~(0xffffffff << 8);
 		float red = ((color_at_point >> 16) & mask)/255.0;
 		float green = ((color_at_point >> 8) & mask)/255.0;
 		float blue = (color_at_point & mask)/255.0;
