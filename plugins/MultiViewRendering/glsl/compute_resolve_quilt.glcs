@@ -6,8 +6,8 @@ layout (local_size_x = 8, local_size_y = 64) in;
 
 layout(binding = 0) uniform writeonly image2D color_tex;
 
-uniform uint screen_w;
-uniform uint quilt_cols;
+uniform int screen_w;
+uniform int quilt_cols;
 
 uniform bool splat;
 
@@ -22,7 +22,7 @@ void main()
 
 	// calculate index for looking up values in the storage buffer
 	// no further calculations for the placement of the point has to be made because storage buffer is constructed like quilt
-	uint index = coord.x+coord.y*(screen_w*quilt_cols);
+	int index = coord.x+coord.y*(screen_w*quilt_cols);
 	uint color_at_point = col_depth[index];
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
@@ -30,8 +30,8 @@ void main()
 	#if SPLAT == 1
 		uint visible = (color_at_point & (1 << 24)) >> 24;
 		if (visible == 0){
-			uint left = index-1; 
-			uint right = index+1;
+			int left = index-1; 
+			int right = index+1;
 			if (coord.x%screen_w == 0)
 				left=index;
 			else if (coord.x%screen_w == screen_w-1)

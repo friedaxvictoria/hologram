@@ -25,7 +25,7 @@
 #include <plugins/cg_fltk/fltk_gl_view.h>
 
 #define COMPUTE 0
-#define EVAL 1
+#define EVAL 0
 
 using namespace cgv::math;
 using namespace cgv::signal;
@@ -992,8 +992,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
-	view_width = 720;
-	view_height = 576;
+	//view_width = 720;
+	//view_height = 576;
 
 	// generate time query for evaluation
 	glGenQueries(1, &time_query);
@@ -1492,21 +1492,21 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 	compute_shader.set_uniform(ctx, "p_source_zero", proj_source[0]);
 	compute_shader.set_uniform(ctx, "start_x", -views_x_extent / 2);
 	compute_shader.set_uniform(ctx, "x_offset", views_x_extent / (nr_holo_views-1));
-	compute_shader.set_uniform(ctx, "nr_holo_views", nr_holo_views);
-	compute_shader.set_uniform(ctx, "nr_render_views", nr_render_views);
+	compute_shader.set_uniform(ctx, "nr_holo_views", (int)nr_holo_views);
+	compute_shader.set_uniform(ctx, "nr_render_views", (int)nr_render_views);
 	compute_shader.set_uniform(ctx, "z_far", (float)z_far_derived);
 	compute_shader.set_uniform(ctx, "shear", shear);
 	compute_shader.set_uniform(ctx, "eye_sep", (float)eye_distance);
 	compute_shader.set_uniform(ctx, "zero_parallax", (float)get_parallax_zero_depth());
-	compute_shader.set_uniform(ctx, "screen_w", view_width);
-	compute_shader.set_uniform(ctx, "screen_h", view_height);
-	compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
+	compute_shader.set_uniform(ctx, "screen_h", (int)view_height);
+	compute_shader.set_uniform(ctx, "quilt_cols", (int)quilt_nr_cols);
 
 	// get work group size from compute shader
 	glGetProgramiv((unsigned)((size_t)compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE, local_work_group);
 	// compute call 
-	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
-					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / (float)local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / (float)local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -1526,9 +1526,9 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 
 	glBindImageTexture(0, (int&)volume_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
-	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", view_height);
-	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
+	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", (int)view_height);
+	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", (int)quilt_nr_cols);
 	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
 		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
 	else
@@ -1538,8 +1538,8 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
 	// compute call
-	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
-					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / (float)local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / (float)local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -1560,8 +1560,8 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 
 	glBindImageTexture(0, (int&)quilt_holo_tex.handle - 1, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", view_width);
-	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", quilt_nr_cols);
+	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
+	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", (int)quilt_nr_cols);
 	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
 		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
 	else
@@ -1571,8 +1571,8 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 	glGetProgramiv((unsigned)((size_t)quilt_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
 	// compute call
-	glDispatchCompute(ceil(view_width * quilt_nr_cols / local_work_group[0]),
-					  ceil(view_height * quilt_nr_rows / local_work_group[1]), 1);
+	glDispatchCompute(ceil(view_width * quilt_nr_cols / (float)local_work_group[0]),
+					  ceil(view_height * quilt_nr_rows / (float)local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 

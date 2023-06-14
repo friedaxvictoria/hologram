@@ -1,6 +1,6 @@
 #version 460 core
 
-layout (local_size_x = 8, local_size_y = 64) in;
+layout (local_size_x = 8, local_size_y =64) in;
 
 uniform sampler2D color_tex0;
 uniform sampler2D depth_tex0;
@@ -19,11 +19,11 @@ uniform float shear;
 uniform float eye_sep;
 uniform float zero_parallax;
 
-uniform uint screen_w;
-uniform uint screen_h;
-uniform uint quilt_cols;
-uniform uint nr_holo_views;
-uniform uint nr_render_views;
+uniform int screen_w;
+uniform int screen_h;
+uniform int quilt_cols;
+uniform int nr_holo_views;
+uniform int nr_render_views;
 
 layout(std430, binding = 0) buffer storage_buffer
 {
@@ -36,7 +36,7 @@ void main()
 	vec2 texcoord = vec2((global_coord.x%screen_w)/float(screen_w-1), (global_coord.y%screen_h)/float(screen_h-1));
 
 	int x_index = int(global_coord.x/float(screen_w));
-	uint current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
+	int current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
 	vec4 eye_target = vec4(start_x + current_view*x_offset, 0, 0, 1);
 
 	vec4 color;
@@ -86,10 +86,8 @@ void main()
 		float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
 		// get the new position in coordinates [0,screen_width) with an offset depending on what view it is
-		uint new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
-		if (x_window == 0)
-			new_pos_x = x_index * screen_w;
-		uint index = new_pos_x+global_coord.y*screen_w*quilt_cols;
+		int new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
+		int index = new_pos_x+global_coord.y*screen_w*quilt_cols;
 		
 		int depth = int(pt_depth * 127);
 		uint point = (depth << 25) | (int(color_bytes.a & 0x1)<<24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
