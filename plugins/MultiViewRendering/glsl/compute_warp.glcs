@@ -1,6 +1,6 @@
 #version 460 core
 
-layout (local_size_x = 5, local_size_y =9) in;
+layout (local_size_x = 8, local_size_y =64) in;
 
 uniform sampler2D color_tex0;
 uniform sampler2D depth_tex0;
