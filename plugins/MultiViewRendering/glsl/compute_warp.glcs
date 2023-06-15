@@ -1,6 +1,6 @@
 #version 460 core
 
-layout (local_size_x = 8, local_size_y =64) in;
+layout (local_size_x = 5, local_size_y =9) in;
 
 uniform sampler2D color_tex0;
 uniform sampler2D depth_tex0;
@@ -58,8 +58,7 @@ void main()
 			pt_depth = textureLod(depth_tex2, texcoord, 0).r;
 		}
 		// if point is too far away, set alpha to zero so it's not visible in the end
-		if (pt_depth >= 1.0)
-			color.a = 0;
+		color.a = (pt_depth >= 1.0) ? 0 : color.a;
 		// combine color and depth information for storing it in the storage buffer
 		ivec4 color_bytes = ivec4(color * 255);
 
@@ -80,10 +79,13 @@ void main()
 
 		// calculate the intersection of the line from source view to the intersection at z_far with the plane at the current point's depth
 		vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
-
+		
 		// reproject point to clip coordinates and calculate it's new window coordinates
 		vec4 new_pos_clip = p_source * intersection_pt_depth;
 		float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
+
+		// push elements to the back that are outside of the view's window to eliminate artefacts at leftmost and rightmost pixel columns
+		pt_depth = (x_window<0 || x_window>1) ? 1 : pt_depth;
 
 		// get the new position in coordinates [0,screen_width) with an offset depending on what view it is
 		int new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);

@@ -1,6 +1,6 @@
 #version 460 core
 
-#define SPLAT 1
+#define SPLAT 0
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
@@ -33,7 +33,7 @@ void main()
 
 	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
 	uint mask = ~(0xffffffff << 8);
-	if(splat){
+	#if SPLAT == 1
 		uint visible = (color_at_point & (1 << 24)) >> 24;
 		if (visible == 0){
 			int left = index-1; 
@@ -62,8 +62,7 @@ void main()
 
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
 		}
-	}
-	else{
+	#else
 		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 		float red = ((color_at_point >> 16) & mask)/255.0;
 		float green = ((color_at_point >> 8) & mask)/255.0;
@@ -72,5 +71,5 @@ void main()
 
 		if (alpha != 0)
 			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-	}
+	#endif
 }

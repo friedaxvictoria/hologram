@@ -24,8 +24,8 @@
 #include <filesystem>
 #include <plugins/cg_fltk/fltk_gl_view.h>
 
-#define COMPUTE 0
-#define EVAL 0
+#define COMPUTE 1
+#define EVAL 1
 
 using namespace cgv::math;
 using namespace cgv::signal;
@@ -968,10 +968,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 {
 	// create offscreem framebuffers used for warping techniques
 	for (unsigned i = 0; i < 3; i++) {
-		render_fbo[i].add_attachment("depth", "[D]", cgv::render::TextureFilter::TF_NEAREST,
-									 cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
-		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]", cgv::render::TextureFilter::TF_NEAREST,
-									 cgv::render::TextureWrap::TW_CLAMP_TO_BORDER);
+		render_fbo[i].add_attachment("depth", "[D]");
+		render_fbo[i].add_attachment("color", "uint8[R,G,B,A]");
 	}
 
 	// build shader programs
@@ -992,8 +990,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
-	//view_width = 720;
-	//view_height = 576;
+	view_width = 720;
+	view_height = 576;
 
 	// generate time query for evaluation
 	glGenQueries(1, &time_query);
@@ -1641,11 +1639,11 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		}
 	}
 	else {
-		#if COMPUTE == 0
 		for (vi = 0; vi < nr_holo_views; ++vi) {
 			volume_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+			#if COMPUTE == 0
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 			gl_set_projection_matrix(ctx, current_e, aspect);
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
@@ -1667,8 +1665,8 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				draw_vertex_warp(ctx);
 				break;
 			}
+			#endif
 		}
-		#endif
 
 		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
 			warp_compute_shader(ctx);

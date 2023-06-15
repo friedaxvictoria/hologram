@@ -1,6 +1,6 @@
 #version 460 core
 
-#define SPLAT 1
+#define SPLAT 0
 
 layout (local_size_x = 8, local_size_y = 64) in;
 
