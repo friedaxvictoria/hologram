@@ -24,9 +24,6 @@
 #include <filesystem>
 #include <plugins/cg_fltk/fltk_gl_view.h>
 
-#define COMPUTE 1
-#define EVAL 1
-
 using namespace cgv::math;
 using namespace cgv::signal;
 using namespace cgv::gui;
@@ -973,25 +970,31 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 	}
 
 	// build shader programs
-	if (!quilt_prog.build_program(ctx, "quilt_finish.glpr", true))
+	if (!shader_lib.add("quilt_prog", "quilt_finish.glpr"))
 		return false;
-	if (!volume_prog.build_program(ctx, "volume_finish.glpr", true))
+	if (!shader_lib.add("volume_prog", "volume_finish.glpr"))
 		return false;
-	if (!reproject_shader.build_program(ctx, "reprojection.glpr", true))
+	if (!shader_lib.add("reproject_shader", "reprojection.glpr"))
 		return false;
-	if (!vwarp_shader.build_program(ctx, "vertex_warp.glpr", true))
+	if (!shader_lib.add("vwarp_shader", "vertex_warp.glpr"))
 		return false;
-	if (!compute_shader.build_program(ctx, "compute_warp.glpr", true))
+	if (!shader_lib.add("compute_shader", "compute_warp.glpr"))
 		return false;
-	if (!volume_resolve_compute_shader.build_program(ctx, "compute_resolve_volume.glpr", true))
+	if (!shader_lib.add("volume_resolve_compute_shader", "compute_resolve_volume.glpr"))
 		return false;
-	if (!quilt_resolve_compute_shader.build_program(ctx, "compute_resolve_quilt.glpr", true))
+	if (!shader_lib.add("quilt_resolve_compute_shader", "compute_resolve_quilt.glpr"))
 		return false;
+	if (!shader_lib.load_all(ctx))
+		return false;
+
+	quilt_prog = shader_lib.get("quilt_prog");
+	volume_prog = shader_lib.get("volume_prog");
+	reproject_shader = shader_lib.get("reproject_shader");
+	vwarp_shader = shader_lib.get("vwarp_shader");
+	compute_shader = shader_lib.get("compute_shader");
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
-	view_width = 720;
-	view_height = 576;
 
 	// generate time query for evaluation
 	glGenQueries(1, &time_query);
@@ -1031,6 +1034,17 @@ void holo_view_interactor::init_frame(context& ctx)
 
 	if (!mesh)
 		mesh = &dynamic_cast<mesh_viewer&>(*cgv::base::find_object_by_name("mesh_viewer"));
+
+	// update resolve compute shaders depending on whether or not splatting should be done
+	if (update_defines) {
+		if (multiview_mpx_mode == MVM_COMPUTE)
+			compute_define["SPLAT"] = "0";
+		else
+			compute_define["SPLAT"] = "1";
+		shader_lib.reload(ctx, "volume_resolve_compute_shader", compute_define);
+		shader_lib.reload(ctx, "quilt_resolve_compute_shader", compute_define);
+		update_defines = false;
+	}
 
 	// check for what to render
 	switch (multiview_mpx_mode) {
@@ -1517,6 +1531,7 @@ void holo_view_interactor::warp_compute_shader(cgv::render::context& ctx)
 // compute shader to transfer data from shader storage buffer to volume texture
 void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::context& ctx)
 {
+	auto& volume_resolve_compute_shader = shader_lib.get("volume_resolve_compute_shader");
 	volume_resolve_compute_shader.enable(ctx);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
@@ -1527,10 +1542,6 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
 	volume_resolve_compute_shader.set_uniform(ctx, "screen_h", (int)view_height);
 	volume_resolve_compute_shader.set_uniform(ctx, "quilt_cols", (int)quilt_nr_cols);
-	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
-		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
-	else
-		volume_resolve_compute_shader.set_uniform(ctx, "splat", false);
 
 	// get work group size from compute shader
 	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
@@ -1551,6 +1562,7 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 // compute shader to transfer data from shader storage buffer to quilt texture
 void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::context& ctx)
 {
+	auto& quilt_resolve_compute_shader = shader_lib.get("quilt_resolve_compute_shader");
 	quilt_resolve_compute_shader.enable(ctx);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
@@ -1560,10 +1572,6 @@ void holo_view_interactor::quilt_resolve_pass_compute_shader(cgv::render::contex
 
 	quilt_resolve_compute_shader.set_uniform(ctx, "screen_w", (int)view_width);
 	quilt_resolve_compute_shader.set_uniform(ctx, "quilt_cols", (int)quilt_nr_cols);
-	if (multiview_mpx_mode == MVM_COMPUTE_SPLAT)
-		volume_resolve_compute_shader.set_uniform(ctx, "splat", true);
-	else
-		volume_resolve_compute_shader.set_uniform(ctx, "splat", false);
 
 	// get work group size from compute shader
 	glGetProgramiv((unsigned)((size_t)quilt_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
@@ -1590,7 +1598,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		#if COMPUTE == 0
 		vi = 0;
 		for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 			for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
@@ -1631,7 +1638,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		glViewport(0, 0, view_width, view_height);
 		glScissor(0, 0, view_width, view_height);
 		glDisable(GL_SCISSOR_TEST);
-		#endif
 		
 		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
 			warp_compute_shader(ctx);
@@ -1643,16 +1649,13 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			volume_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			#if COMPUTE == 0
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 			gl_set_projection_matrix(ctx, current_e, aspect);
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
 			// visualise holes
-			#if EVAL == 0
 			if (show_holes)
 				mesh->draw_holes(ctx);
-			#endif
 
 			switch (multiview_mpx_mode) {
 			case MVM_REPROJECT:
@@ -1665,7 +1668,6 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				draw_vertex_warp(ctx);
 				break;
 			}
-			#endif
 		}
 
 		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
@@ -2016,6 +2018,8 @@ void holo_view_interactor::on_set(void* m)
 		holo_mpx_mode = HM_SINGLE;
 		update_member(&holo_mpx_mode);
 	}
+	else if (m == &multiview_mpx_mode && (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT))
+		update_defines = true;
 	// change size of shader storage buffer in case viewport changes
 	else if (m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols) {
 		glDeleteBuffers(1, &ssbo);

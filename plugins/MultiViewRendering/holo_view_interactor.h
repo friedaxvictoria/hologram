@@ -8,6 +8,7 @@
 #include <cgv/render/shader_program.h>
 #include <cgv/render/managed_frame_buffer.h>
 #include <cgv/render/frame_buffer.h>
+#include <cgv/render/shader_library.h>
 #include <cgv/gui/event_handler.h>
 #include <cgv/gui/key_event.h>
 #include <cgv/gui/provider.h>
@@ -147,9 +148,12 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::frame_buffer quilt_fbo, volume_fbo;
 	cgv::render::render_buffer quilt_depth_buffer, volume_depth_buffer;
 
+	cgv::render::shader_library shader_lib;
+	bool update_defines = false;
+	shader_define_map compute_define;
+
 	// shader programs for acceleration techniques
-	cgv::render::shader_program reproject_shader, vwarp_shader, compute_shader,
-		  volume_resolve_compute_shader, quilt_resolve_compute_shader;
+	cgv::render::shader_program reproject_shader, vwarp_shader, compute_shader;
 	// heightmap for warping techniques
 	GPUgeometry heightmap_reproject, heightmap_vwarp;
 

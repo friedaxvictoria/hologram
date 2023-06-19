@@ -10,8 +10,6 @@ uniform int screen_w;
 uniform int screen_h;
 uniform int quilt_cols;
 
-uniform bool splat;
-
 layout(std430, binding = 0) buffer storage_buffer
 {
     uint col_depth[];

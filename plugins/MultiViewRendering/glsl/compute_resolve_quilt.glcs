@@ -9,8 +9,6 @@ layout(binding = 0) uniform writeonly image2D color_tex;
 uniform int screen_w;
 uniform int quilt_cols;
 
-uniform bool splat;
-
 layout(std430, binding = 0) buffer storage_buffer
 {
     uint col_depth[];
