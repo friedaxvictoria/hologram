@@ -25,7 +25,7 @@
 #include <plugins/cg_fltk/fltk_gl_view.h>
 
 #define EVAL 1
-#define COMPUTE 1
+#define COMPUTE 0
 
 using namespace cgv::math;
 using namespace cgv::signal;
