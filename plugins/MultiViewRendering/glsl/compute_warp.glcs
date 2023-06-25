@@ -1,6 +1,6 @@
 #version 460 core
 
-layout (local_size_x = 8, local_size_y =64) in;
+layout (local_size_x = 16, local_size_y = 16) in;
 
 uniform sampler2D color_tex0;
 uniform sampler2D depth_tex0;
@@ -32,12 +32,8 @@ layout(std430, binding = 0) buffer storage_buffer
 
 void main()
 {  	
-	ivec2 global_coord = ivec2(gl_GlobalInvocationID.xy);
-	vec2 texcoord = vec2((global_coord.x%screen_w)/float(screen_w-1), (global_coord.y%screen_h)/float(screen_h-1));
-
-	int x_index = int(global_coord.x/float(screen_w));
-	int current_view = x_index + int(global_coord.y/float(screen_h))*quilt_cols;
-	vec4 eye_target = vec4(start_x + current_view*x_offset, 0, 0, 1);
+	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+	vec2 texcoord = vec2(coord.x/float(screen_w-1), coord.y/float(screen_h-1));
 
 	vec4 color;
 	float pt_depth;
@@ -73,31 +69,37 @@ void main()
 		vec4 pt_eye_coord = inverse(p_source) * vec4(2*texcoord.x-1, 2*texcoord.y-1, 2*pt_depth-1, 1);
 		vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
-		// calculate the intersection of the line from target view to the current point with the plane at z_far
-		vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
-		intersection_z_far.x -=  shear * (eye_target.x - eye_source.x);
+		for (int c = 0; c < nr_holo_views; c++){
+			vec4 eye_target = vec4(start_x + c*x_offset, 0, 0, 1);
 
-		// calculate the intersection of the line from source view to the intersection at z_far with the plane at the current point's depth
-		vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
+			// calculate the intersection of the line from target view to the current point with the plane at z_far
+			vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
+			intersection_z_far.x -=  shear * (eye_target.x - eye_source.x);
+
+			// calculate the intersection of the line from source view to the intersection at z_far with the plane at the current point's depth
+			vec4 intersection_pt_depth = eye_source + (eye_source-intersection_z_far) * pos_eye.z / intersection_z_far.z;
 		
-		// reproject point to clip coordinates and calculate it's new window coordinates
-		vec4 new_pos_clip = p_source * intersection_pt_depth;
-		float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
+			// reproject point to clip coordinates and calculate it's new window coordinates
+			vec4 new_pos_clip = p_source * intersection_pt_depth;
+			float x_window = 0.5*(new_pos_clip.x/new_pos_clip.w+1);
 
-		// push elements to the back that are outside of the view's window to eliminate artefacts at leftmost and rightmost pixel columns
-		pt_depth = (x_window<0 || x_window>1) ? 1 : pt_depth;
+			// push elements to the back that are outside of the view's window to eliminate artefacts at leftmost and rightmost pixel columns
+			pt_depth = (x_window<0 || x_window>1) ? 1 : pt_depth;
 
-		// get the new position in coordinates [0,screen_width) with an offset depending on what view it is
-		int new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
-		int index = new_pos_x+global_coord.y*screen_w*quilt_cols;
+			// get the new position in coordinates [0,screen_width) with an offset depending on what view it is
+			int x_index = c%quilt_cols;
+			int y_index = c/quilt_cols;
+			int new_pos_x = clamp(int(ceil((x_window+x_index) * screen_w - 1)),x_index*screen_w,(x_index+1)*screen_w-1);
+			int index = new_pos_x+(coord.y+screen_h*y_index)*screen_w*quilt_cols;
 		
-		int depth = int(pt_depth * 127);
-		uint point = (depth << 25) | (int(color_bytes.a & 0x1)<<24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
-		uint old_point = col_depth[index];
-		// early depth test
-		if(old_point > point){
-			// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
-			atomicMin(col_depth[index],point);
+			int depth = int(pt_depth * 127);
+			uint point = (depth << 25) | (int(color_bytes.a & 0x1)<<24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
+			uint old_point = col_depth[index];
+			// early depth test
+			if(old_point > point){
+				// use atomicMin to keep the value with the smallest depth (z-buffer alternative)
+				atomicMin(col_depth[index],point);
+			}
 		}
 	}
 }
