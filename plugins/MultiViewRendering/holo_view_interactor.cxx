@@ -1547,8 +1547,8 @@ void holo_view_interactor::volume_resolve_pass_compute_shader(cgv::render::conte
 	glGetProgramiv((unsigned)((size_t)volume_resolve_compute_shader.handle) - 1, GL_COMPUTE_WORK_GROUP_SIZE,
 				   local_work_group);
 	// compute call
-	glDispatchCompute(ceil(view_width * quilt_nr_cols / (float)local_work_group[0]),
-					  ceil(view_height * quilt_nr_rows / (float)local_work_group[1]), 1);
+	glDispatchCompute(ceil(view_width / (float)local_work_group[0]),
+					  ceil(view_height / (float)local_work_group[1]), 1);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 

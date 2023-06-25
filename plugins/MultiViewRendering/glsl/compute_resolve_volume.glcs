@@ -19,55 +19,53 @@ void main()
 {  	
 	ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
-	// get current color
-	int index = coord.x+coord.y*screen_w*quilt_cols;
-	uint color_at_point = col_depth[index];
+	for (int c = 0; c<45; c++){
+		// get current color
+		int x_index = c%quilt_cols;
+		int y_index = c/quilt_cols;
+		int index = (coord.x+screen_w*x_index)+(coord.y+screen_h*y_index)*screen_w*quilt_cols;
+		uint color_at_point = col_depth[index];
 
-	// which view (z-value for 3D texture) is being calculated
-	int current_view = int(coord.x/float(screen_w)) + int(coord.y/float(screen_h))*quilt_cols;
+		// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
+		uint mask = ~(0xffffffff << 8);
+		#if SPLAT == 1
+			uint visible = (color_at_point & (1 << 24)) >> 24;
+			if (visible == 0){
+				int left = index-1; 
+				int right = index+1;
+				if (coord.x == 0)
+					left=index;
+				else if (coord.x == screen_w-1)
+					right = index;
+				uint color_int_left = col_depth[left];
+				uint color_int_right = col_depth[right];
 
-	// calculate coordinates for texture: [0, screen_width) for x and [0, screen_height) for y
-	ivec2 image_coord = ivec2(coord.x%screen_w,coord.y%screen_h);
+				//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+				float red = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
+				float green = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
+				float blue = ((color_int_left& mask) + (color_int_right & mask))/500.0;
+				float alpha = (((color_int_left & (1 << 24)) >> 24) + ((color_int_right & (1 << 24)) >> 24))/2.0;
 
-	// do point splatting if current point has wrong geometry --> use left and right point in x-offset and interpolate their values
-	uint mask = ~(0xffffffff << 8);
-	#if SPLAT == 1
-		uint visible = (color_at_point & (1 << 24)) >> 24;
-		if (visible == 0){
-			int left = index-1; 
-			int right = index+1;
-			if (coord.x%screen_w == 0)
-				left=index;
-			else if (coord.x%screen_w == screen_w-1)
-				right = index;
-			uint color_int_left = col_depth[left];
-			uint color_int_right = col_depth[right];
+				if (alpha != 0)
+					imageStore(color_tex, ivec3(coord,c), vec4(red, green, blue,1));
+			}
+			else{
+				//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
+				float red = ((color_at_point >> 16) & mask)/255.0;
+				float green = ((color_at_point >> 8) & mask)/255.0;
+				float blue = (color_at_point & mask)/255.0;
 
-			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-			float red = (((color_int_left >> 16) & mask) + ((color_int_right >> 16) & mask))/500.0;
-			float green = (((color_int_left >> 8) & mask) + ((color_int_right >> 8) & mask))/500.0;
-			float blue = ((color_int_left& mask) + (color_int_right & mask))/500.0;
-			float alpha = (((color_int_left & (1 << 24)) >> 24) + ((color_int_right & (1 << 24)) >> 24))/2.0;
-
-			if (alpha != 0)
-				imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-		}
-		else{
+				imageStore(color_tex, ivec3(coord,c), vec4(red, green, blue,1));
+			}
+		#else
 			//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
 			float red = ((color_at_point >> 16) & mask)/255.0;
 			float green = ((color_at_point >> 8) & mask)/255.0;
 			float blue = (color_at_point & mask)/255.0;
+			uint alpha = (color_at_point & (1 << 24)) >> 24;
 
-			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-		}
-	#else
-		//getting colors from storage buffer integer from: https://developer.download.nvidia.com/cg/bitfieldExtract.html
-		float red = ((color_at_point >> 16) & mask)/255.0;
-		float green = ((color_at_point >> 8) & mask)/255.0;
-		float blue = (color_at_point & mask)/255.0;
-		uint alpha = (color_at_point & (1 << 24)) >> 24;
-
-		if (alpha != 0)
-			imageStore(color_tex, ivec3(image_coord,current_view), vec4(red, green, blue,1));
-	#endif
+			if (alpha != 0)
+				imageStore(color_tex, ivec3(coord,c), vec4(red, green, blue,1));
+		#endif
+	}
 }
