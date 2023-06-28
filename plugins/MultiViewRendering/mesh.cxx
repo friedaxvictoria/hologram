@@ -184,15 +184,13 @@ void mesh_viewer::ensure_mesh_colors()
 #pragma omp for
 	for (int i = 0; i < nr_positions; i++) {
 		double v = modf(double(20 * i) / double(nr_positions - 1), &dummy);
-		// interpolate between ##0072BD, #4DBEEE, and #77AC30
-		if (v<0.5)
-			M.set_color(i, cgv::media::color<float, cgv::media::RGB>(154.0 / 255 * v,
-																	 114.0 / 255 * (1 - 2 * v) + 190.0 / 255 * 2 * v,
-																	 189.0 / 255 * (1 - 2 * v) + 238.0 / 255 * 2 * v));
-		else
-			M.set_color(i, cgv::media::color<float, cgv::media::RGB>(77.0 / 255 * (2-2 * v) + 119.0 / 255 * (2 * v - 1),
-																	 190.0 / 255 * (2-2 * v) + 172.0 / 255 * (2 * v - 1),
-																  238.0 / 255 * (2 - 2 * v) + 48.0 / 255 * (2 * v - 1)));
+		// interpolate between ##0072BD, #7E2F8E, and #4DBEEE
+		if (v<0.5) M.set_color(
+			  i, cgv::media::color<float, cgv::media::RGB>(0.4940 * 2 * v, 0.4470 * (1 - 2 * v) + 0.1840 * 2 * v,
+																  0.7410 * (1 - 2 * v) + 0.5560 * 2 * v));
+		else M.set_color(i, cgv::media::color<float, cgv::media::RGB>(0.4940 * (2 - 2 * v) + 0.3010 * (2 * v - 1),
+																	   0.1840 * (2 - 2 * v) + 0.7450 * (2 * v - 1),
+																	 0.5560 * (2 - 2 * v) + 0.9330 * (2 * v - 1)));
 	}
 }
 

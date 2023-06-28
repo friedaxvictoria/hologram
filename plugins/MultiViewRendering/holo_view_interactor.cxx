@@ -32,6 +32,9 @@ using namespace cgv::render;
 using namespace cgv::render::gl;
 using namespace cgv::base;
 
+#define EVAL 1
+#define COMPUTE 1
+
 #define SMP_ENUMS "bitmap,pixels,arrow"
 #define HOLO_ENUMS "single,quilt,volume"
 
@@ -995,6 +998,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	view_width = ctx.get_width();
 	view_height = ctx.get_height();
+	view_width = 720;
+	view_height = 576;
 
 	// generate time query for evaluation
 	glGenQueries(1, &time_query);
@@ -1008,7 +1013,7 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 						nullptr, GL_DYNAMIC_COPY);
 
 	// in case the csv file is empty or doesn't exist, set it up for evaluation
-	std::ifstream in("measurements.csv");
+	std::ifstream in("measurements_new_compute.csv");
 	if (in.is_open()) {
 		in.seekg(0, std::ios::end);
 		size_t size = in.tellg();
@@ -1598,6 +1603,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 		glClearColor(quilt_bg_color.R(), quilt_bg_color.G(), quilt_bg_color.B(), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		#if COMPUTE == 0
 		vi = 0;
 		for (quilt_row = 0; quilt_row < quilt_nr_rows; ++quilt_row) {
 			for (quilt_col = 0; quilt_col < quilt_nr_cols; ++quilt_col) {
@@ -1611,9 +1617,11 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				gl_set_projection_matrix(ctx, current_e, aspect);
 				gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
+				#if EVAL == 0
 				// visualise holes
 				if (show_holes) 
 					mesh->draw_holes(ctx);
+				#endif
 
 				switch (multiview_mpx_mode) {
 				case MVM_REPROJECT:
@@ -1632,6 +1640,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			if (vi == nr_holo_views)
 				break;
 		}
+		#endif
 
 		glViewport(0, 0, view_width, view_height);
 		glScissor(0, 0, view_width, view_height);
@@ -1647,13 +1656,16 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 			volume_fbo.attach(ctx, volume_holo_tex, vi, 0, 0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+			#if COMPUTE == 0
 			current_e = (2.0f * vi) / (nr_holo_views - 1) - 1.0f;
 			gl_set_projection_matrix(ctx, current_e, aspect);
 			gl_set_modelview_matrix(ctx, current_e, aspect, *this);
 
+			#if EVAL == 0
 			// visualise holes
 			if (show_holes)
 				mesh->draw_holes(ctx);
+			#endif
 
 			switch (multiview_mpx_mode) {
 			case MVM_REPROJECT:
@@ -1666,6 +1678,7 @@ void holo_view_interactor::compute_holo_views(cgv::render::context& ctx)
 				draw_vertex_warp(ctx);
 				break;
 			}
+			#endif
 		}
 
 		if (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT) {
@@ -1779,9 +1792,9 @@ void holo_view_interactor::post_process_surface(cgv::render::context& ctx)
 			// write all time measurements to csv file
 			std::filesystem::path cwd = std::filesystem::current_path();
 			if (cwd.string().find("res") != std::string::npos)
-				file.open("../measurements.csv", std::ofstream::in | std::ofstream::app);
+				file.open("../measurements_new_compute.csv", std::ofstream::in | std::ofstream::app);
 			else
-				file.open("measurements.csv", std::ofstream::in | std::ofstream::app);
+				file.open("measurements_new_compute.csv", std::ofstream::in | std::ofstream::app);
 			file << nr_render_views << ", " << multiview_mpx_mode << ", "
 				   << mesh->get_number_positions() << ", "<< holo_mpx_mode;
 			for (int i = 0; i < time_measurements.size(); i++) {
@@ -1806,7 +1819,7 @@ void holo_view_interactor::set_up_eval_file() {
 	if (answer == 1 || set_up_file_for_eval == false) {
 		std::filesystem::path cwd = std::filesystem::current_path();
 		if (cwd.string().find("res") != std::string::npos) 
-			file.open("../measurements.csv");
+			file.open("../measurements_new_compute.csv");
 		else
 			file.open("measurements.csv");
 		file << "nr render views, mode, nr vertices, storage";
