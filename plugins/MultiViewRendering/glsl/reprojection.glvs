@@ -28,9 +28,10 @@ void main()
 	color_fs = textureLod(color, texcoord,0);
 
 	float depth = textureLod(depth, texcoord, 0).r;
-	discard_fs = depth < 1 ? 0 : 1; // make sure we see a non-zero value in the fragment shader whenever we have bad geometry
+	 // non-zero value will be seen in the fragment shader whenever there is bad geometry
+	discard_fs = depth < 1 ? 0 : 1;
 
-	// caluculate the projection direction based off of the pixel coordinates
+	// caluculate the projection direction based off of the pixel's coordinates
 	vec4 proj_one = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 0, 1);
 	vec4 proj_two = inv_mvp_source * vec4(2*texcoord.s-1, 2*texcoord.t-1, 1, 1);
 	direction_fs = normalize((proj_one - proj_two).xyz);

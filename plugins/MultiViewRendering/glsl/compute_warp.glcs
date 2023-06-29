@@ -9,15 +9,14 @@ uniform sampler2D depth_tex1;
 uniform sampler2D color_tex2;
 uniform sampler2D depth_tex2;
 
-uniform mat4 p_source_zero;
+uniform mat4 p_source_zero;		// arbitrary projection matrix from one view
 
-uniform float start_x;
-uniform float x_offset;
-
-uniform float z_far;
-uniform float shear;
-uniform float eye_sep;
-uniform float zero_parallax;
+uniform float start_x;			// x-coordinate in eye coordinates where the leftmost view lies
+uniform float x_offset;			// the difference in x-coordinates between two views in eye coordinates
+uniform float z_far;			// (positive) depth at z-far plane
+uniform float shear;			// offset due to shear of the different projection matrices
+uniform float eye_sep;			// eye seperation between stereo eyes
+uniform float zero_parallax;	// (positive) depth at zero parallax
 
 uniform int screen_w;
 uniform int screen_h;
@@ -56,12 +55,12 @@ void main()
 			color = textureLod(color_tex2, texcoord, 0);
 			pt_depth = textureLod(depth_tex2, texcoord, 0).r;
 		}
-		// combine color and depth information for storing it in the storage buffer
 		ivec4 color_bytes = ivec4(color * 255);
 
 		// get source view data depending on the for-loop iteration
 		float source_idx = nr_render_views == 1 ? 0.0 : (2.0f * i) / (nr_render_views - 1) - 1.0f;
 		vec4 eye_source = vec4(- start_x * source_idx, 0, 0, 1);
+		// calculate source view's projection source view's matrix
 		mat4 p_source = p_source_zero;
 		p_source[2][0] = -eye_sep * source_idx;
 		p_source[3][0] = -zero_parallax * eye_sep * source_idx;
@@ -71,7 +70,9 @@ void main()
 		vec4 pos_eye = vec4(pt_eye_coord.xyz/pt_eye_coord.w,1);
 
 		for (int c = 0; c < nr_holo_views; c++){
+			// calculate target position in eye coordinates
 			vec4 eye_target = vec4(start_x + c*x_offset, 0, 0, 1);
+
 			// calculate the intersection of the line from target view to the current point with the plane at z_far
 			vec4 intersection_z_far = eye_target + (eye_target - pos_eye) * z_far / pos_eye.z;
 			intersection_z_far.x -=  shear * (eye_target.x - eye_source.x);
@@ -92,6 +93,7 @@ void main()
 			// push elements to the back that are outside of the view's window to eliminate artefacts at leftmost and rightmost pixel columns
 			int depth = (x_window<0.0 || x_window>1.0) ? 127 : int(127*pt_depth);
 
+			// assemble all data into a single 32 bit integer
 			uint point = (depth << 25) | (int(color_bytes.a & 0x1)<<24) | (int(color_bytes.r) << 16) | (int(color_bytes.g) << 8) | int(color_bytes.b);
 			uint old_point = col_depth[index];
 			// early depth test

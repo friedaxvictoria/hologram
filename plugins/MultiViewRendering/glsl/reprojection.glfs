@@ -1,7 +1,7 @@
 #version 330 core
 
-uniform float epsilon;
-uniform bool artefacts;
+uniform float epsilon;	// error term for rubber-sheet removal
+uniform bool artefacts;	// whether or not rubber-sheets should be removed
 
 in vec4 color_fs;
 in float discard_fs;
@@ -13,8 +13,10 @@ out vec4 color;
 
 void main()
 {
+	// calculate fragment's normal for rubber-sheet removal
 	vec3 normal = normalize(cross(dFdx(pos_source_world.xyz), dFdy(pos_source_world.xyz)));
 	float ortho_to_proj = abs(dot(direction_fs, normal));
+
 	if (artefacts && (ortho_to_proj < epsilon))
 		discard; // dont't render rubber-sheets
 	if (discard_fs > 0)

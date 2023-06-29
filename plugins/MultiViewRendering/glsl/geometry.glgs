@@ -10,13 +10,10 @@ in VS_OUT {
 layout (triangles, invocations = 4) in;
 layout (triangle_strip, max_vertices = 3) out;
 
-// distance between stereo eyes
-uniform float eye_sep;
-// index of the first view position for this geometry shader call [-1,1]
-uniform float eye;
-// how far is one view away from the next --> depends on amount of views
-uniform float view_offset;
-uniform float zero_parallax;
+uniform float eye_sep;			// distance between stereo eyes
+uniform float eye;				// index of the first view position for this geometry shader call [-1,1]
+uniform float view_offset;		// the difference in x-coordinates between two views in eye coordinates
+uniform float zero_parallax;	// (positive) depth at zero parallax
 
 out vec3 normal_eye;
 out vec3 position_eye;
@@ -41,10 +38,10 @@ void main()
 		color_fs = gs_in[i].color_gs;
 		texcoord_fs = gs_in[i].texcoord_gs;
 
-		// calculate clip coordinates for point
+		// calculate clip coordinates for vertex
 		gl_Position = p * gl_in[i].gl_Position;
 
-		// set layer and viewport index for volume or quilt variant
+		// set layer for volume mode and viewport index for quilt mode
 		gl_Layer = gl_InvocationID;
 		gl_ViewportIndex = gl_InvocationID;
 

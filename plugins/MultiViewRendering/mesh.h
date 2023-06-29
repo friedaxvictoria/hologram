@@ -44,7 +44,7 @@ class mesh_viewer :
 	cgv::render::mesh_render_info mesh_info, mesh_for_geo_info, mesh_for_holes_info;
 	cgv::render::box3 M_bbox;
 	cgv::render::box_wire_render_data<> M_bbox_rd;
-	bool meshfile_supplies_colors, invent_missing_colors = true;
+	bool meshfile_supplies_colors, invent_missing_colors = false;
 
 	bool update_view_after_mesh_processed = false;
 
@@ -95,12 +95,13 @@ class mesh_viewer :
 		void create_gui();
 		void focus_mesh();
 
-		// method that visualises holes by simply rendering the correct geometry in green
+		// method that visualises holes by simply rendering the correct geometry in yellow
 		void draw_holes(context& ctx);
 		// do exactly the same as in normal draw method but with geometry shader call instead
 		void draw_geometry_shader(context& ctx);
 		// store variables for the computation of the projection matrices in the geometry shader
 		void set_params_for_gemoetry(float zero_parallax, float eye_distance, float eye, float num_holo_views);
+
 		// returns number of vertices for the current mesh
 		int get_number_positions();
    };

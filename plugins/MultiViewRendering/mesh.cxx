@@ -148,6 +148,14 @@ void mesh_viewer::process_mesh_for_rendering(context& ctx, bool update_view = tr
 	sr.set_position_array(ctx, M.get_positions());
 	if (M.has_colors())
 		sr.set_color_array(ctx, *reinterpret_cast<const std::vector<rgb>*>(M.get_color_data_vector_ptr()));
+	else {
+		std::vector<rgb> colour;
+		colour.resize(M.get_positions().size());
+		for (size_t i = 0; i < M.get_positions().size(); ++i) {
+			colour[i] = rgb(sphere_style.surface_color);
+		}
+		sr.set_color_array(ctx, colour);
+	}
 
 	// adjust camera parameters when requested
 	update_view_after_mesh_processed |= update_view;
@@ -181,7 +189,7 @@ void mesh_viewer::ensure_mesh_colors()
 	const int nr_positions = M.get_nr_positions();
 	M.ensure_colors(cgv::media::CT_RGB, nr_positions);
 	double dummy;
-#pragma omp for
+	#pragma omp for
 	for (int i = 0; i < nr_positions; i++) {
 		double v = modf(double(20 * i) / double(nr_positions - 1), &dummy);
 		// interpolate between ##0072BD, #7E2F8E, and #4DBEEE
@@ -218,6 +226,8 @@ void mesh_viewer::on_set(void* member_ptr)
 			M.destruct_colors();
 		process_mesh_for_rendering(*get_context(), false);
 	}
+	if (member_ptr == &sphere_style.surface_color && !M.has_colors())
+		process_mesh_for_rendering(*get_context());
 
 	update_member(member_ptr);
 	post_redraw();
@@ -271,6 +281,7 @@ void mesh_viewer::clear(context& ctx)
 
 void mesh_viewer::init_frame(context& ctx){}
 
+// draw holes in yellow behind the rendered object
 void mesh_viewer::draw_holes(context& ctx)
 {
 	glDisable(GL_CULL_FACE);
@@ -381,6 +392,8 @@ void mesh_viewer::draw(context& ctx)
 			cr.disable(ctx);
 		}
 	}
+
+	// render with standard shader program or geometry shader program depending on what was selected in the gui
 	if (show_surface) {
 		if (with_geometry)
 			draw_geometry_shader(ctx);
@@ -397,6 +410,7 @@ void mesh_viewer::draw(context& ctx)
 void mesh_viewer::finish_frame(context& ctx)
 {
 	if (show_surface)
+		// render with standard shader program or geometry shader program depending on what was selected in the gui
 		if (with_geometry) {
 			draw_geometry_shader(ctx);
 			with_geometry = false;
@@ -438,7 +452,7 @@ void mesh_viewer::create_gui()
 		align("\a");
 		add_gui("style", sphere_style);
 		align("\b");
-		end_tree_node(show_wireframe);
+		end_tree_node(show_vertices);
 	}
 	show = begin_tree_node("wireframe", show_wireframe, false, "options='w=100';align=' '");
 	add_member_control(this, "show", show_wireframe, "toggle", "w=42;shortcut='w'", " ");

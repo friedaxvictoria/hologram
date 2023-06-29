@@ -106,14 +106,23 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 
 	// rendering
   public:
-	enum MultiplexMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
-	MultiplexMode holo_mpx_mode = HM_SINGLE;
-	enum MultiViewMode {MVM_SINGLE, MVM_CONVENTIONAL, MVM_REPROJECT, MVM_VWARP, MVM_VWARP_CLOSEST, MVM_COMPUTE_SPLAT, MVM_COMPUTE, MVM_GEOMETRY};
+	enum StorageMode { HM_SINGLE, HM_QUILT, HM_VOLUME };
+	StorageMode holo_storage_mode = HM_SINGLE;
+	enum MultiViewMode {
+		MVM_SINGLE,
+		MVM_CONVENTIONAL,
+		MVM_GEOMETRY,
+		MVM_REPROJECT,
+		MVM_VWARP,
+		MVM_VWARP_CLOSEST,
+		MVM_COMPUTE_SPLAT,
+		MVM_COMPUTE
+	};
 	MultiViewMode multiview_mpx_mode = MVM_SINGLE;
 
   protected:
-	unsigned view_width = 1638;
-	unsigned view_height = 910;
+	unsigned view_width = 909;
+	unsigned view_height = 720;
 	unsigned nr_render_views = 3;
 	unsigned view_index = 22;
 	unsigned nr_holo_views = 45;
@@ -135,7 +144,6 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	unsigned quilt_nr_rows = 9;
 	bool quilt_interpolate = true;
 	bool quilt_write_to_file = false;
-	float w = 1.0;
 	//volume
 	bool volume_write_to_file = false;
 
@@ -148,28 +156,30 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::frame_buffer quilt_fbo, volume_fbo;
 	cgv::render::render_buffer quilt_depth_buffer, volume_depth_buffer;
 
+	// shader library variables 
 	cgv::render::shader_library shader_lib;
 	bool update_defines = false;
 	shader_define_map compute_define;
 
 	// shader programs for acceleration techniques
 	cgv::render::shader_program reproject_shader, vwarp_shader, compute_shader;
-	// heightmap for warping techniques
+	// heightmap for vertex warping techniques
 	GPUgeometry heightmap_reproject, heightmap_vwarp;
 
 	// offscreen framebuffers for rendering source views
 	cgv::render::managed_frame_buffer render_fbo[3], current_render_fbo;
 
-	// layered framebuffer etc for geometry shader
+	// layered framebuffer for geometry shader approach
 	cgv::render::texture layered_depth_tex, layered_color_tex;
 	cgv::render::frame_buffer layered_fbo;
 
 	// projection and modelview matrices of source views
 	mat4 proj_source[3], modelview_source[3];
+
 	// positions of source views in eye space
 	vec4 eye_source[3];
 
-	// rubber sheet removal
+	// rubber sheet removal with error term
 	bool dis_artefacts = false; 
 	float epsilon = 0.02;
 
@@ -260,8 +270,8 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	void disable_surface(cgv::render::context& ctx);
 	void post_process_surface(cgv::render::context& ctx);
 
-	// warping techniques
-	// reprojection technique
+	// warping approaches
+	// reprojection approach
 	void draw_reproject(cgv::render::context& ctx);
 	// simple vertex warp
 	void draw_vertex_warp(cgv::render::context& ctx);
@@ -272,13 +282,13 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// output result from compute shader ssbo to framebuffer
 	void volume_resolve_pass_compute_shader(cgv::render::context& ctx);
 	void quilt_resolve_pass_compute_shader(cgv::render::context& ctx);
-	// generates all needed views out of the source views depending on what technique is chosen
+	// generates all needed views out of the source views depending on what approach is chosen
 	void compute_holo_views(cgv::render::context& ctx);
 
 	// evaluation
 	// starts or stops an evaluation run
 	void toggle_eval();
-	// sets up a csv file into which the time measurements of the evaluation are written
+	// sets up a .csv file into which the time measurements of the evaluation are written
 	void set_up_eval_file();
 
   public:
@@ -410,7 +420,7 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	int last_x, last_y;
 };
 
-extern CGV_API cgv::reflect::enum_reflection_traits<holo_view_interactor::MultiplexMode>
-get_reflection_traits(const holo_view_interactor::MultiplexMode&);
+extern CGV_API cgv::reflect::enum_reflection_traits<holo_view_interactor::StorageMode>
+get_reflection_traits(const holo_view_interactor::StorageMode&);
 
 #include <cgv/config/lib_end.h>
