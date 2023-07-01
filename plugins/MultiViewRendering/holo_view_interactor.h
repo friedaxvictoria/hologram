@@ -156,6 +156,9 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	cgv::render::frame_buffer quilt_fbo, volume_fbo;
 	cgv::render::render_buffer quilt_depth_buffer, volume_depth_buffer;
 
+	// indicates that number of holo views has changed --> the volume texture needs to be reconstructed
+	bool change_nr_holo_views = false;
+
 	// shader library variables 
 	cgv::render::shader_library shader_lib;
 	bool update_defines = false;

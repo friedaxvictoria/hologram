@@ -1008,7 +1008,8 @@ bool holo_view_interactor::init(cgv::render::context& ctx)
 
 	// set up size of ssbo 
 	glNamedBufferData(ssbo,
-						GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+					  GLsizeiptr(sizeof(unsigned int) * view_width * view_height *
+								 std::ceil(nr_holo_views / (float)quilt_nr_cols) * quilt_nr_cols),
 						nullptr, GL_DYNAMIC_COPY);
 
 	#if EVAL == 1
@@ -1289,7 +1290,8 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 		quilt_fbo.push_viewport(ctx);
 	}
 	else {
-		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width || volume_fbo.get_height() != view_height)
+		if (!volume_fbo.is_created() || volume_fbo.get_width() != view_width ||
+			volume_fbo.get_height() != view_height || change_nr_holo_views)
 		{
 			volume_fbo.destruct(ctx);
 			volume_holo_tex.destruct(ctx);
@@ -1299,6 +1301,7 @@ void holo_view_interactor::enable_surface(cgv::render::context& ctx)
 			volume_holo_tex.create(ctx, TT_3D, view_width, view_height, nr_holo_views);
 			volume_fbo.attach(ctx, volume_holo_tex, 0, 0, 0);
 			volume_fbo.attach(ctx, volume_depth_buffer);
+			change_nr_holo_views = false;
 		}
 		volume_fbo.enable(ctx);
 		volume_fbo.push_viewport(ctx);
@@ -1922,6 +1925,8 @@ void holo_view_interactor::draw_focus()
 	glEnd();
 }
 
+
+
 /// return a path in the main menu to select the gui
 std::string holo_view_interactor::get_menu_path() const { return "View/Stereo Interactor"; }
 
@@ -1985,7 +1990,7 @@ void holo_view_interactor::create_gui()
 			add_member_control(this, "Number Rendered Views", nr_render_views, "value_slider",
 							   "min=1;max=3;ticks=true");
 			add_member_control(this, "Number Hologram Views", nr_holo_views, "value_slider",
-							   "min=2;max=45;ticks=true");
+							   "min=2;max=100;ticks=true");
 			add_member_control(this, "Epsilon", epsilon, "value_slider", "min=0;max=0.1;step=0.00001;ticks=true");
 			add_member_control(this, "View Index", view_index, "value_slider", "min=0;max=44;ticks=true");
 			add_member_control(this, "Blit Offset x", blit_offset_x, "value_slider", "min=0;max=1000;ticks=true");
@@ -2046,22 +2051,25 @@ void holo_view_interactor::create_gui()
 void holo_view_interactor::on_set(void* m)
 {
 	if (m == &nr_holo_views) {
-		if (view_index > nr_holo_views)
+		if (view_index >= nr_holo_views)
 			view_index = nr_holo_views - 1;
 		if (find_control(view_index))
 			find_control(view_index)->set("max", nr_holo_views - 1);
+		update_member(&view_index);
+		change_nr_holo_views = true;
 	}
 	// make sure MVM_SINGLE is not shown as quilt or volume
-	else if (multiview_mpx_mode == MVM_SINGLE && holo_storage_mode != HM_SINGLE)
+	if (multiview_mpx_mode == MVM_SINGLE && holo_storage_mode != HM_SINGLE)
 		holo_storage_mode = HM_SINGLE;
-	else if (m == &multiview_mpx_mode && (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT))
+	if (m == &multiview_mpx_mode && (multiview_mpx_mode == MVM_COMPUTE || multiview_mpx_mode == MVM_COMPUTE_SPLAT))
 		update_defines = true;
 	// change size of shader storage buffer in case viewport changes
-	else if (m == &view_width || m == &view_height || m == &quilt_nr_rows || m == &quilt_nr_cols) {
+	if (m == &view_width || m == &view_height || m == &nr_holo_views || m == &quilt_nr_cols) {
 		glDeleteBuffers(1, &ssbo);
 		glGenBuffers(1, &ssbo);
 		glNamedBufferData(ssbo,
-						  GLsizeiptr(sizeof(unsigned int) * view_width * view_height * quilt_nr_rows * quilt_nr_cols),
+						  GLsizeiptr(sizeof(unsigned int) * view_width * view_height *
+									 std::ceil(nr_holo_views / (float)quilt_nr_cols) * quilt_nr_cols),
 							nullptr, GL_DYNAMIC_COPY);
 	}
 	update_member(m);
