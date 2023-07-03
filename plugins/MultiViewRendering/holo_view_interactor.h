@@ -196,6 +196,9 @@ class CGV_API holo_view_interactor : public cgv::base::node,
 	// visual evaluation
 	bool show_holes = true;
 
+	// whether or not the optimal variation for the multi-view rendering should be chosen
+	bool choose_optimal = false;
+
 	// variables for performance measurements
 	GLuint64 elapsed_time;
 	GLuint time_query;

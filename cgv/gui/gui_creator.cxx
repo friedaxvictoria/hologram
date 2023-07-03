@@ -18,15 +18,14 @@ void register_gui_creator(gui_creator* gc, const char* creator_name)
 }
 
 /// create the gui for a composed structure
-bool create_gui(provider* p, const std::string& label, 
-		void* value_ptr, const std::string& value_type, 
-		const std::string& gui_type, const std::string& options, bool* toggles)
+bool create_gui(provider* p, const std::string& label, void* value_ptr, const std::string& value_type,
+				const std::string& gui_type, const std::string& options, bool* toggles)
 {
-	for (unsigned i=0; i<ref_gui_creators().size(); ++i)
-		if (ref_gui_creators()[i]->create(p,label,value_ptr,value_type,gui_type,options,toggles))
-			return true;
-	return false;
-}
+	for (unsigned i = 0; i < ref_gui_creators().size(); ++i) {
 
+		if (ref_gui_creators()[i]->create(p, label, value_ptr, value_type, gui_type, options, toggles))
+			return true;
+		return false;
 	}
+}
 }

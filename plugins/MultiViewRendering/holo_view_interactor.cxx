@@ -1980,6 +1980,7 @@ void holo_view_interactor::create_gui()
 		}
 		if (begin_tree_node("Rendering", multiview_mpx_mode, true)) {
 			align("\a");
+			add_member_control(this, "Use Optimal", choose_optimal, "toggle");
 			add_member_control(this, "Render Multiplexing", multiview_mpx_mode, "dropdown",
 							   "enums='single view, conventional, geometry, reproject, vertex warp, vertex warp closest, "
 							   "compute warp splat, compute warp'");
@@ -2071,6 +2072,23 @@ void holo_view_interactor::on_set(void* m)
 						  GLsizeiptr(sizeof(unsigned int) * view_width * view_height *
 									 std::ceil(nr_holo_views / (float)quilt_nr_cols) * quilt_nr_cols),
 							nullptr, GL_DYNAMIC_COPY);
+	}
+	// in case the optimal solution is chosen, the conventional approach should be used for smaller scenes. The compute approach with splat and three source views
+	// should be chosen for larger scenes. The volume mode is used for the storage modus because it is slightly faster for the conventional approach for smaller scenes and
+	// slightly faster for the compute splat approach for larger scenes
+	if (choose_optimal) {
+		int num_vertices = mesh->get_number_positions();
+		if (num_vertices < 750000) {
+			multiview_mpx_mode = MVM_CONVENTIONAL;
+		}
+		else {
+			multiview_mpx_mode = MVM_COMPUTE_SPLAT;
+			nr_render_views = 3;
+			update_member(&nr_render_views);
+		}
+		update_member(&multiview_mpx_mode);
+		holo_storage_mode = HM_VOLUME;
+		update_member(&holo_storage_mode);
 	}
 	update_member(m);
 	post_redraw();
